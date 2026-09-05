@@ -1,0 +1,33 @@
+AutoEditor  —  runs entirely on your PC
+
+WHAT IT DOES
+  Turn timestamp-named images + a voiceover into an MP4. Rendering happens on
+  YOUR computer using your GPU/CPU. Nothing is uploaded to the internet.
+
+REQUIREMENTS
+  Windows 10/11 (64-bit). Nothing to install — everything (the app engine and
+  the video encoder) is bundled inside this folder.
+
+HOW TO START
+  1. Double-click  AutoEditor.exe
+  2. A black window opens and says the app is running. Your browser opens
+     automatically to  http://localhost:4000
+  3. KEEP THAT BLACK WINDOW OPEN while you use the app.
+
+HOW TO STOP
+  - Close the black window, or press Ctrl+C in it.
+
+WHERE YOUR VIDEOS GO
+  - Each finished render downloads through your browser as usual, AND is also
+    auto-saved to:  <your Downloads>\AutoEditor\
+    So even if you refresh or close the tab right as it finishes, the MP4 is
+    safely on disk. The black window prints the exact folder on startup.
+
+NOTES
+  - First launch takes a few seconds while it detects your graphics hardware.
+  - A dedicated/integrated GPU (Intel/NVIDIA/AMD) is used automatically for a
+    big speed-up; if none works, it falls back to the CPU and still renders.
+  - If Windows SmartScreen warns about AutoEditor.exe, choose "More info" ->
+    "Run anyway" (it's just the bundled app, unsigned).
+  - Don't delete AutoEditor.exe, ffmpeg.exe, caption.ttf, or the "out" folder
+    - the app needs them.

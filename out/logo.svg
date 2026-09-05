@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7d99ff"/>
+      <stop offset="1" stop-color="#4a68e6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- simple play button: accent-blue squircle, no dark backdrop -->
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="url(#tile)"/>
+
+  <!-- white play triangle -->
+  <path d="M52 40 L92 64 L52 88 Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="8"
+        stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
