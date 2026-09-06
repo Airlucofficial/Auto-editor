@@ -1,0 +1,98 @@
+{
+  "whoosh_fast": {
+    "id": "whoosh_fast",
+    "name": "Fast Whip Whoosh",
+    "filename": "whoosh_fast.wav",
+    "url": "/sfx/whoosh_fast.wav",
+    "description": "High energy whoosh for fast wipes and cuts",
+    "category": "motion"
+  },
+  "swoosh_smooth": {
+    "id": "swoosh_smooth",
+    "name": "Cinematic Swoosh",
+    "filename": "swoosh_smooth.wav",
+    "url": "/sfx/swoosh_smooth.wav",
+    "description": "Smooth air swoosh for slides and crossfades",
+    "category": "motion"
+  },
+  "camera_click": {
+    "id": "camera_click",
+    "name": "Camera Shutter & Click",
+    "filename": "camera_click.wav",
+    "url": "/sfx/camera_click.wav",
+    "description": "Snappy camera shutter for photo cuts and zooms",
+    "category": "foley"
+  },
+  "bubble_pop": {
+    "id": "bubble_pop",
+    "name": "Bubble Pop",
+    "filename": "bubble_pop.wav",
+    "url": "/sfx/bubble_pop.wav",
+    "description": "Playful pop for bouncy and viral short cuts",
+    "category": "retro"
+  },
+  "cinematic_boom": {
+    "id": "cinematic_boom",
+    "name": "Cinematic Sub Boom",
+    "filename": "cinematic_boom.wav",
+    "url": "/sfx/cinematic_boom.wav",
+    "description": "Deep impact hit for fade to black and dramatic cuts",
+    "category": "impact"
+  },
+  "digital_glitch": {
+    "id": "digital_glitch",
+    "name": "Digital Glitch",
+    "filename": "digital_glitch.wav",
+    "url": "/sfx/digital_glitch.wav",
+    "description": "Electronic riser for cyber and fast transitions",
+    "category": "electronic"
+  },
+  "gentle_chime": {
+    "id": "gentle_chime",
+    "name": "Gentle Bell Chime",
+    "filename": "gentle_chime.wav",
+    "url": "/sfx/gentle_chime.wav",
+    "description": "Sweet chime for elegant fades and corporate videos",
+    "category": "ambient"
+  },
+  "paper_turn": {
+    "id": "paper_turn",
+    "name": "Paper Turn",
+    "filename": "paper_turn.wav",
+    "url": "/sfx/paper_turn.wav",
+    "description": "Crisp paper flip for documentary and story cuts",
+    "category": "foley"
+  },
+  "snappy_switch": {
+    "id": "snappy_switch",
+    "name": "Tactile Click",
+    "filename": "snappy_switch.wav",
+    "url": "/sfx/snappy_switch.wav",
+    "description": "Sharp tactile click for instant cuts",
+    "category": "foley"
+  },
+  "impact_punch": {
+    "id": "impact_punch",
+    "name": "Punch Impact",
+    "filename": "impact_punch.wav",
+    "url": "/sfx/impact_punch.wav",
+    "description": "Solid modern punch impact",
+    "category": "impact"
+  },
+  "cinematic_riser": {
+    "id": "cinematic_riser",
+    "name": "Tension Riser",
+    "filename": "cinematic_riser.wav",
+    "url": "/sfx/cinematic_riser.wav",
+    "description": "Atmospheric upward swell riser",
+    "category": "motion"
+  },
+  "short_woosh": {
+    "id": "short_woosh",
+    "name": "Snappy Micro-Woosh",
+    "filename": "short_woosh.wav",
+    "url": "/sfx/short_woosh.wav",
+    "description": "Ultra-short woosh for fast cuts",
+    "category": "motion"
+  }
+}

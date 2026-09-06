@@ -64,7 +64,10 @@ def get_model(model_size: str = "small", device: str = "cpu", compute_type: str 
                 model = _MODEL_CACHE[fallback_key]
             else:
                 print(f"Loading faster-whisper model '{fallback_size}' on {device} ({compute_type})...", file=sys.stderr)
-                model = WhisperModel(fallback_size, device=device, compute_type=compute_type)
+                try:
+                    model = WhisperModel(fallback_size, device=device, compute_type=compute_type, local_files_only=True)
+                except Exception:
+                    model = WhisperModel(fallback_size, device=device, compute_type=compute_type)
                 _MODEL_CACHE[fallback_key] = model
 
         _MODEL_CACHE[key] = model
@@ -423,6 +426,150 @@ def burn_captions_to_video(video_path: str, ass_path: str, output_path: str, fon
     ]
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return res.returncode == 0 and os.path.exists(output_path)
+
+def remove_vocal_from_video_or_audio(input_path: str, output_path: str, vocal_volume: float = 0.0) -> bool:
+    """
+    Suppresses or eliminates human vocal frequencies from video/audio
+    while preserving high-frequency clicks, transients, foley, and background sound effects.
+    vocal_volume: 0.0 = complete voice removal (max attenuation)
+                  0.5 = 50% voice volume
+                  1.0 = full voice (original)
+    Supports both audio output (.wav, .mp3, .m4a) and video output (.mp4, .mov, .mkv, etc.).
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ffmpeg_exe = os.path.join(base_dir, "ffmpeg.exe")
+    if not os.path.exists(ffmpeg_exe):
+        ffmpeg_exe = "ffmpeg"
+
+    v_vol = max(0.0, min(1.0, float(vocal_volume)))
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    ext = os.path.splitext(output_path)[1].lower()
+    is_video_out = ext in [".mp4", ".mov", ".mkv", ".webm", ".avi"]
+
+    if v_vol >= 0.98:
+        # Pass through without vocal reduction
+        if is_video_out:
+            cmd = [ffmpeg_exe, "-y", "-i", input_path, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", output_path]
+        elif ext == ".wav":
+            cmd = [ffmpeg_exe, "-y", "-i", input_path, "-vn", "-c:a", "pcm_s16le", output_path]
+        elif ext == ".mp3":
+            cmd = [ffmpeg_exe, "-y", "-i", input_path, "-vn", "-c:a", "libmp3lame", "-b:a", "192k", output_path]
+        else:
+            cmd = [ffmpeg_exe, "-y", "-i", input_path, "-vn", "-c:a", "aac", "-b:a", "192k", output_path]
+    else:
+        # Speech fundamentals (120Hz-400Hz) and formants (800Hz-3.5kHz) notch attenuation
+        # Preserves crisp click transients (>4kHz) and sub frequencies
+        att = int(round(-32.0 * (1.0 - v_vol)))
+        af_filter = (
+            f"equalizer=f=300:t=q:w=1.2:g={int(att*0.8)},"
+            f"equalizer=f=1050:t=q:w=1.6:g={att},"
+            f"equalizer=f=2200:t=q:w=1.6:g={int(att*0.9)},"
+            f"equalizer=f=3300:t=q:w=1.4:g={int(att*0.7)}"
+        )
+        if is_video_out:
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-i", input_path,
+                "-c:v", "copy",
+                "-af", af_filter,
+                "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ]
+        elif ext == ".wav":
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-i", input_path,
+                "-vn",
+                "-af", af_filter,
+                "-c:a", "pcm_s16le",
+                output_path
+            ]
+        elif ext == ".mp3":
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-i", input_path,
+                "-vn",
+                "-af", af_filter,
+                "-c:a", "libmp3lame", "-b:a", "192k",
+                output_path
+            ]
+        else:
+            cmd = [
+                ffmpeg_exe, "-y",
+                "-i", input_path,
+                "-vn",
+                "-af", af_filter,
+                "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ]
+
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return res.returncode == 0 and os.path.exists(output_path)
+
+def mix_audio_with_sfx(main_audio: str, sfx_events: list, output_audio: str, sfx_volume: float = 0.5, voice_volume: float = 1.0) -> bool:
+    """
+    Mixes master voiceover audio with transition sound effects at specified timestamps.
+    sfx_events: list of dicts: [{"file": path_to_wav, "timestamp": sec}]
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ffmpeg_exe = os.path.join(base_dir, "ffmpeg.exe")
+    if not os.path.exists(ffmpeg_exe):
+        ffmpeg_exe = "ffmpeg"
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_audio)), exist_ok=True)
+    ext = os.path.splitext(output_audio)[1].lower()
+    if ext == ".wav":
+        codec_args = ["-c:a", "pcm_s16le"]
+    elif ext == ".mp3":
+        codec_args = ["-c:a", "libmp3lame", "-b:a", "192k"]
+    else:
+        codec_args = ["-c:a", "aac", "-b:a", "192k"]
+
+    if not sfx_events:
+        # Just adjust voice volume if needed
+        cmd = [
+            ffmpeg_exe, "-y", "-i", main_audio,
+            "-af", f"volume={voice_volume:.3f}",
+            *codec_args, output_audio
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return res.returncode == 0 and os.path.exists(output_audio)
+
+    # Build multi-input filter_complex
+    cmd = [ffmpeg_exe, "-y", "-i", main_audio]
+    filter_parts = [f"[0:a]volume={voice_volume:.3f}[a0]"]
+    mix_inputs = ["[a0]"]
+
+    for idx, evt in enumerate(sfx_events, start=1):
+        sfx_path = evt.get("file")
+        ts_ms = int(round(max(0.0, float(evt.get("timestamp", 0.0))) * 1000.0))
+        if sfx_path and os.path.exists(sfx_path):
+            cmd.extend(["-i", sfx_path])
+            filter_parts.append(f"[{idx}:a]volume={sfx_volume:.3f},adelay={ts_ms}|{ts_ms}[sfx{idx}]")
+            mix_inputs.append(f"[sfx{idx}]")
+
+    num_inputs = len(mix_inputs)
+    if num_inputs == 1:
+        cmd = [
+            ffmpeg_exe, "-y", "-i", main_audio,
+            "-af", f"volume={voice_volume:.3f}",
+            *codec_args, output_audio
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return res.returncode == 0 and os.path.exists(output_audio)
+
+    filter_parts.append(f"{''.join(mix_inputs)}amix=inputs={num_inputs}:normalize=0:dropout_transition=0[aout]")
+    filter_str = ";".join(filter_parts)
+
+    cmd.extend([
+        "-filter_complex", filter_str,
+        "-map", "[aout]",
+        *codec_args,
+        output_audio
+    ])
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return res.returncode == 0 and os.path.exists(output_audio)
+
 
 CATEGORIES = {   'viral_shorts': 'Viral Shorts & TikTok',
     'hormozi': 'Hormozi & Viral Retention',
@@ -2327,11 +2474,14 @@ CAPTION_STYLES = {   'bouncy_shorts': {   'id': 'bouncy_shorts',
                                    'activeColor': '#ffffff',
                                    'textShadow': '2px 2px 2px #000'}}}
 
-def generate_ass_subtitles(transcript_data: dict, style_key: str, output_ass_path: str, video_width: int = 1920, video_height: int = 1080):
+def generate_ass_subtitles(transcript_data: dict, style_key: str, output_ass_path: str, video_width: int = 1920, video_height: int = 1080, pos_x: float = None, pos_y: float = None, font_scale: float = 1.0):
     style = CAPTION_STYLES.get(style_key, CAPTION_STYLES["hormozi_bold"])
 
     font = style.get("font", "Arial")
     fontsize = style.get("fontsize", 44)
+    if font_scale and font_scale > 0 and font_scale != 1.0:
+        fontsize = max(14, int(round(fontsize * float(font_scale))))
+
     primary_c = style.get("primary_color", "&H00FFFFFF")
     active_c = style.get("active_color", "&H0000FFFF")
     outline_c = style.get("outline_color", "&H00000000")
@@ -2344,6 +2494,13 @@ def generate_ass_subtitles(transcript_data: dict, style_key: str, output_ass_pat
     border_style = style.get("border_style", 1)
     is_uppercase = style.get("uppercase", False)
     anim_type = style.get("animation_type", "karaoke_highlight")
+
+    # Interactive monitor positioning support
+    pos_tag = ""
+    if pos_x is not None or pos_y is not None:
+        px = int(round((pos_x if pos_x is not None else 0.5) * video_width))
+        py = int(round((pos_y if pos_y is not None else 0.85) * video_height))
+        pos_tag = f"{{\\an5\\pos({px},{py})}}"
 
     ass_lines = [
         "[Script Info]",
@@ -2361,16 +2518,36 @@ def generate_ass_subtitles(transcript_data: dict, style_key: str, output_ass_pat
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     ]
 
-    segments = transcript_data.get("segments", [])
+    if isinstance(transcript_data, list):
+        segments = transcript_data
+    elif isinstance(transcript_data, dict):
+        segments = transcript_data.get("segments", transcript_data.get("cues", []))
+    else:
+        segments = []
 
     for seg in segments:
-        words = seg.get("words", [])
+        words = seg.get("words")
+        if words is None:
+            txt = seg.get("text", "").strip()
+            if not txt:
+                continue
+            seg_start = float(seg.get("start", 0.0))
+            seg_end = float(seg.get("end", seg_start + 1.0))
+            tokens = txt.split()
+            if len(tokens) > 1 and seg_end > seg_start:
+                step = (seg_end - seg_start) / len(tokens)
+                words = [{"word": tok, "start": seg_start + idx * step, "end": seg_start + (idx + 1) * step} for idx, tok in enumerate(tokens)]
+            else:
+                words = []
+
         if not words:
-            start_str = format_ass_time(seg["start"])
-            end_str = format_ass_time(seg["end"])
+            start_str = format_ass_time(seg.get("start", 0.0))
+            end_str = format_ass_time(seg.get("end", 0.0))
             txt = seg.get("text", "").strip()
             if is_uppercase:
                 txt = txt.upper()
+            if pos_tag:
+                txt = f"{pos_tag}{txt}"
             ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{txt}")
             continue
 
@@ -2415,8 +2592,11 @@ def generate_ass_subtitles(transcript_data: dict, style_key: str, output_ass_pat
                         line_parts.append(raw_word)
 
                 dialogue_text = " ".join(line_parts)
+                if pos_tag:
+                    dialogue_text = f"{pos_tag}{dialogue_text}"
                 ass_lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{dialogue_text}")
 
+    os.makedirs(os.path.dirname(os.path.abspath(output_ass_path)), exist_ok=True)
     with open(output_ass_path, "w", encoding="utf-8") as f:
         f.write("\n".join(ass_lines))
 

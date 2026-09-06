@@ -1,4 +1,4 @@
-﻿# Python & Bytecode
+# Python & Bytecode
 __pycache__/
 *.pyc
 *.pyo
@@ -17,11 +17,13 @@ storage/
 *.txt
 !READ ME FIRST.txt
 !out/index.txt
+!out/sfx/*.wav
 !PROJECT.md
 !TEST_INFRA.md
 !TEST_READY.md
 test_*.json
 tests/e2e_results.json
+scratch/
 
 # Internal Agent Workspaces & Logs
 .agents/

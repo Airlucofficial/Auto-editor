@@ -29,6 +29,7 @@ def run_tests():
     js_chunk_path = os.path.join(PROJECT_DIR, "out", "_next", "static", "chunks", "app", "page-f2b7366e605a20db.js")
 
     # 1. Test Node execution of filename parser directly from bundle
+    os.makedirs(os.path.join(PROJECT_DIR, "scratch"), exist_ok=True)
     node_script_file = os.path.join(PROJECT_DIR, "scratch", "eval_equiv.js")
     with open(node_script_file, "w", encoding="utf-8") as f:
         f.write("""
