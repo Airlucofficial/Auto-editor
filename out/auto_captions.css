@@ -770,4 +770,52 @@
   to { transform: rotate(360deg); }
 }
 
+/* Intelligent Auto-Speed Clip Badge & Status */
+.clip__speed {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%) !important;
+  color: #ffffff !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  margin-left: 5px !important;
+  box-shadow: 0 1px 6px rgba(239, 68, 68, 0.45) !important;
+  letter-spacing: 0.02em !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
+  cursor: help !important;
+  animation: capSpeedPulse 2s ease-in-out infinite alternate !important;
+  vertical-align: middle !important;
+}
+
+@keyframes capSpeedPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.04); filter: brightness(1.15); }
+}
+
+.cap-auto-speed-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  padding: 4px 10px !important;
+  border-radius: 9999px !important;
+  user-select: none !important;
+}
+
+.cap-auto-speed-pill .pill-dot {
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  box-shadow: 0 0 8px #10b981 !important;
+}
+
+
 

@@ -40,13 +40,18 @@ AutoEditor visual files ko unke filename se timeline par map karta hai:
 - **`M-SS.ext` (Recommended):**  
   - `0-00.png` → Video ke bilkul shuru (0:00) par aayegi.
   - `0-04.png` → 4th second (0:04) par cut-in karegi.
+  - `0-05.5.mp4` → 5.5th second par video cut-in karegi (Supports decimal timestamps!).
   - `0-15.jpg` → 15th second (0:15) par aayegi.
   - `1-02.mp4` → 1 minute 2 second (62nd second) par video clip play hogi.
-- **`M_SS.ext`:** Jaise `0_00.png`, `0_08.png`, `1_20.mp4`.
+- **`M_SS.ext`:** Jaise `0_00.png`, `0_08.png`, `0_05.5.mp4`, `1_20.mp4`.
 - **`HH-MM-SS.ext`:** Jaise `0-01-30.png` (1 min 30 sec).
-- **Direct Seconds:** Jaise `5.png` (5s), `45.jpg` (45s), `105.png` (1m 05s).
+- **Direct Seconds & Decimals:** Jaise `5.5.mp4` (5.5s), `10.mp4` (10s), `45.jpg` (45s), `105.png` (1m 05s).
+- **Explicit Timestamp Ranges:** Jaise `5.5-10.mp4`, `5.5_10.mp4`, `5.5 to 0.10.mp4`, `0-05.5_0-10.mp4`.
 
-> **Rule:** Jab tak agli image/video ka timestamp nahi aata, pichli image screen par rehti hai. Is liye timestamps ke darmiyan gap scene ki duration tay karta hai.
+> **Intelligent Auto-Speed Feature:**  
+> Agar koi video clip lambi ho (maslan 10s ya 15s) lekin uska required timestamp slot chhota ho (maslan 5.5s se 10s = 4.5s ya 5s), toh AutoEditor automatically video ki playback aur rendering speed calculate kar ke fast-forward kar deta hai (e.g. 15s clip in 5s slot = 3.0× speed). User ko manually speed badhane ki zaroorat nahi parti.
+
+> **Rule:** Jab tak agli image/video ka timestamp nahi aata, pichli image/video screen par rehti hai. Is liye timestamps ke darmiyan gap scene ki duration tay karta hai.
 
 ---
 

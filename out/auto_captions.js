@@ -2133,6 +2133,8 @@
     removeUnwantedLinks();
     ensureModal();
     injectHeaderButton();
+    injectAutoSpeedBadge();
+    updateTimelineSpeedBadges();
 
     // 1. Check for empty captions state in editor sidebar
     const capEmpty = document.querySelector(".panel.captions .cap-empty");
@@ -2335,6 +2337,115 @@
       actionsBar.appendChild(btn);
     }
   }
+
+  // Global Video Duration Cache
+  window._videoDurationCache = window._videoDurationCache || {};
+
+  function injectAutoSpeedBadge() {
+    const actionsBar = document.querySelector(".bar__actions") || document.querySelector(".bar");
+    if (!actionsBar) return;
+    if (document.getElementById("cap-auto-speed-pill")) return;
+
+    const pill = document.createElement("div");
+    pill.id = "cap-auto-speed-pill";
+    pill.className = "cap-auto-speed-pill";
+    pill.title = "Intelligent Video Speed: Active. Videos longer than their timestamp slots are automatically accelerated to fit seamlessly.";
+    pill.innerHTML = '<span class="pill-dot"></span><span>⚡ Auto-Speed: Active</span>';
+
+    const captionsBtn = document.getElementById("btn-auto-captions");
+    if (captionsBtn && captionsBtn.nextSibling) {
+      actionsBar.insertBefore(pill, captionsBtn.nextSibling);
+    } else {
+      actionsBar.appendChild(pill);
+    }
+  }
+
+  function updateTimelineSpeedBadges() {
+    const clips = document.querySelectorAll(".clip");
+    if (!clips || !clips.length) return;
+
+    clips.forEach(clip => {
+      const isVideo = clip.querySelector(".clip__video");
+      if (!isVideo) return;
+
+      const meta = clip.querySelector(".clip__meta");
+      if (!meta) return;
+
+      const title = clip.getAttribute("title") || "";
+      const slotDur = parseFloat(meta.innerText) || 0;
+
+      // Extract filename from title (e.g. "my_video.mp4 · 0:05.5 · 4.5s")
+      const fnMatch = title.match(/^([^·\n]+)\s*·/);
+      const filename = fnMatch ? fnMatch[1].trim() : "";
+
+      let srcDur = 0;
+      if (filename && window._videoDurationCache && window._videoDurationCache[filename]) {
+        srcDur = window._videoDurationCache[filename];
+      } else if (window._videoDurationCache) {
+        for (const k in window._videoDurationCache) {
+          if (filename.includes(k) || k.includes(filename)) {
+            srcDur = window._videoDurationCache[k];
+            break;
+          }
+        }
+      }
+
+      let badge = clip.querySelector(".clip__speed");
+      if (srcDur > 0 && slotDur > 0 && srcDur > slotDur + 0.05) {
+        const speed = (srcDur / slotDur).toFixed(1);
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "clip__speed";
+          badge.title = `Auto-fit: ${srcDur.toFixed(1)}s video accelerated at ${speed}× to fit slot`;
+          badge.innerHTML = `⚡ ${speed}&times;`;
+          isVideo.parentNode.insertBefore(badge, isVideo.nextSibling);
+        } else {
+          badge.innerHTML = `⚡ ${speed}&times;`;
+          badge.title = `Auto-fit: ${srcDur.toFixed(1)}s video accelerated at ${speed}× to fit slot`;
+        }
+      }
+    });
+  }
+
+  // Pre-cache video durations on file selection or drag-and-drop
+  try {
+    document.addEventListener("change", function(e) {
+      const input = e.target;
+      if (input && input.type === "file" && input.files) {
+        Array.from(input.files).forEach(f => {
+          if (f.type && f.type.startsWith("video/")) {
+            const v = document.createElement("video");
+            v.preload = "metadata";
+            v.src = URL.createObjectURL(f);
+            v.onloadedmetadata = () => {
+              if (isFinite(v.duration) && v.duration > 0) {
+                window._videoDurationCache[f.name] = v.duration;
+                updateTimelineSpeedBadges();
+              }
+            };
+          }
+        });
+      }
+    }, true);
+
+    document.addEventListener("drop", function(e) {
+      if (e.dataTransfer && e.dataTransfer.files) {
+        Array.from(e.dataTransfer.files).forEach(f => {
+          if (f.type && f.type.startsWith("video/")) {
+            const v = document.createElement("video");
+            v.preload = "metadata";
+            v.src = URL.createObjectURL(f);
+            v.onloadedmetadata = () => {
+              if (isFinite(v.duration) && v.duration > 0) {
+                window._videoDurationCache[f.name] = v.duration;
+                updateTimelineSpeedBadges();
+              }
+            };
+          }
+        });
+      }
+    }, true);
+  } catch (e) {}
 
   function createModal() {
     let root = document.getElementById("cap-modal-root");
