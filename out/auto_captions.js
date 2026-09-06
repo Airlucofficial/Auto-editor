@@ -1999,30 +1999,62 @@
     };
   } catch (e) {}
 
+  let isUpdatingUI = false;
+  let mutationDebounceTimer = null;
+
   function init() {
     console.log("Initializing AutoEditor Auto-Captions & Transcribe Extension (64 Presets + In-Editor Sync)...");
     
     // Track voiceover audio files globally
     trackVoiceoverAudio();
 
-    // Continuously strip unwanted header links (Discord & Extension)
-    removeUnwantedLinks();
-
-    injectHeaderButton();
+    // Ensure modal container is created safely
     ensureModal();
     checkServerHealth();
     fetchRemoteStyles();
     
-    // Heartbeat for server & UI watcher
-    setInterval(checkServerHealth, 4000);
-    setInterval(watchEditorUI, 500);
-
-    // Watch for DOM changes (React hydration / navigation)
-    const observer = new MutationObserver(() => {
+    // Wait for initial React hydration before injecting into header actions
+    setTimeout(() => {
       removeUnwantedLinks();
       injectHeaderButton();
-      ensureModal();
-      watchEditorUI();
+      injectAutoSpeedBadge();
+    }, 300);
+
+    // Heartbeat for server & UI watcher
+    setInterval(checkServerHealth, 4000);
+    setInterval(() => {
+      if (!isUpdatingUI) watchEditorUI();
+    }, 600);
+
+    // Watch for DOM changes with debounce & re-entrancy guard
+    const observer = new MutationObserver((mutations) => {
+      if (isUpdatingUI) return;
+
+      // Filter out mutations on extension's own elements
+      const isInternal = mutations.every(m => {
+        const target = m.target;
+        return target && (
+          (target.id && (target.id === "cap-modal-root" || target.id === "btn-auto-captions" || target.id === "cap-auto-speed-pill")) ||
+          (target.closest && (target.closest("#cap-modal-root") || target.closest("#btn-auto-captions") || target.closest("#cap-auto-speed-pill") || target.closest(".clip__speed"))) ||
+          (target.classList && target.classList.contains("clip__speed"))
+        );
+      });
+      if (isInternal) return;
+
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        mutationDebounceTimer = null;
+        if (isUpdatingUI) return;
+        isUpdatingUI = true;
+        try {
+          removeUnwantedLinks();
+          injectHeaderButton();
+          ensureModal();
+          watchEditorUI();
+        } finally {
+          isUpdatingUI = false;
+        }
+      }, 100);
     });
     if (document.body) {
       observer.observe(document.body, { childList: true, subtree: true });
@@ -2377,13 +2409,14 @@
       // Extract filename from title (e.g. "my_video.mp4 · 0:05.5 · 4.5s")
       const fnMatch = title.match(/^([^·\n]+)\s*·/);
       const filename = fnMatch ? fnMatch[1].trim() : "";
+      if (!filename || filename.length === 0) return;
 
       let srcDur = 0;
-      if (filename && window._videoDurationCache && window._videoDurationCache[filename]) {
+      if (window._videoDurationCache && window._videoDurationCache[filename]) {
         srcDur = window._videoDurationCache[filename];
       } else if (window._videoDurationCache) {
         for (const k in window._videoDurationCache) {
-          if (filename.includes(k) || k.includes(filename)) {
+          if (k && (filename.includes(k) || k.includes(filename))) {
             srcDur = window._videoDurationCache[k];
             break;
           }
@@ -2393,16 +2426,20 @@
       let badge = clip.querySelector(".clip__speed");
       if (srcDur > 0 && slotDur > 0 && srcDur > slotDur + 0.05) {
         const speed = (srcDur / slotDur).toFixed(1);
+        const speedHtml = `⚡ ${speed}&times;`;
+        const speedTitle = `Auto-fit: ${srcDur.toFixed(1)}s video accelerated at ${speed}× to fit slot`;
         if (!badge) {
           badge = document.createElement("span");
           badge.className = "clip__speed";
-          badge.title = `Auto-fit: ${srcDur.toFixed(1)}s video accelerated at ${speed}× to fit slot`;
-          badge.innerHTML = `⚡ ${speed}&times;`;
+          badge.title = speedTitle;
+          badge.innerHTML = speedHtml;
           isVideo.parentNode.insertBefore(badge, isVideo.nextSibling);
         } else {
-          badge.innerHTML = `⚡ ${speed}&times;`;
-          badge.title = `Auto-fit: ${srcDur.toFixed(1)}s video accelerated at ${speed}× to fit slot`;
+          if (badge.innerHTML !== speedHtml) badge.innerHTML = speedHtml;
+          if (badge.title !== speedTitle) badge.title = speedTitle;
         }
+      } else if (badge) {
+        badge.remove();
       }
     });
   }
