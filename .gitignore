@@ -1,0 +1,33 @@
+﻿# Python & Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# AI Generated Storage & Temporary Renders
+storage/
+*.mp4
+*.wav
+*.ass
+*.pdf
+*.txt
+!READ ME FIRST.txt
+!out/index.txt
+!PROJECT.md
+!TEST_INFRA.md
+!TEST_READY.md
+test_*.json
+tests/e2e_results.json
+
+# Internal Agent Workspaces & Logs
+.agents/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

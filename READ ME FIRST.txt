@@ -1,33 +1,34 @@
-AutoEditor  —  runs entirely on your PC
+﻿AutoEditor v2  —  runs entirely on your PC with AI Captions & Transcription
 
 WHAT IT DOES
-  Turn timestamp-named images + a voiceover into an MP4. Rendering happens on
-  YOUR computer using your GPU/CPU. Nothing is uploaded to the internet.
-
-REQUIREMENTS
-  Windows 10/11 (64-bit). Nothing to install — everything (the app engine and
-  the video encoder) is bundled inside this folder.
+  1. Sync timestamp-named images + a voiceover into an MP4 video.
+  2. Audio-to-Transcript Engine (Local Whisper AI):
+     - Automatic high-accuracy speech-to-text with exact word timestamps.
+     - Clean second-based interval formatting (e.g. 0.0s – 3.4s).
+     - 1-Click Export to TXT and PDF documents with visual timestamp badges.
+  3. Automatic Caption Generator (CapCut-Style & In-Editor Preview):
+     - 64 curated preset styles across 8 categories (Viral Shorts, Hormozi,
+       Neon Glow, Cinematic, Boxed & Pill, Headline 3D, Comic Pop, Broadcast).
+     - In-Editor 1-Click "Create Automatic Captions": instantly transcribes your
+       voiceover and renders captions directly onto the video canvas while
+       editing and scrubbing BEFORE rendering!
+     - In-Editor Caption Preset Selector to switch styles seamlessly on the fly.
+     - Subtitle burn-in via FFmpeg drawtext / ASS filters for final MP4 export.
 
 HOW TO START
-  1. Double-click  AutoEditor.exe
-  2. A black window opens and says the app is running. Your browser opens
-     automatically to  http://localhost:4000
-  3. KEEP THAT BLACK WINDOW OPEN while you use the app.
+  Method 1 (Recommended - 1-Click AI Launcher):
+    - Double-click "Start-AutoEditor-AI.bat"
+    - Starts the persistent AI Engine background service and opens AutoEditor.
 
-HOW TO STOP
-  - Close the black window, or press Ctrl+C in it.
+  Method 2 (Manual Terminal):
+    - Run: $env:RENDER_ZOOM_SS = "1"; .\AutoEditor.exe
+    - Open http://localhost:4000 in your browser.
+
+REQUIREMENTS
+  - Windows 10/11 (64-bit).
+  - All transcription, rendering, and encoding run 100% locally on your device.
+    Zero cloud uploads, private and offline-capable.
 
 WHERE YOUR VIDEOS GO
-  - Each finished render downloads through your browser as usual, AND is also
-    auto-saved to:  <your Downloads>\AutoEditor\
-    So even if you refresh or close the tab right as it finishes, the MP4 is
-    safely on disk. The black window prints the exact folder on startup.
-
-NOTES
-  - First launch takes a few seconds while it detects your graphics hardware.
-  - A dedicated/integrated GPU (Intel/NVIDIA/AMD) is used automatically for a
-    big speed-up; if none works, it falls back to the CPU and still renders.
-  - If Windows SmartScreen warns about AutoEditor.exe, choose "More info" ->
-    "Run anyway" (it's just the bundled app, unsigned).
-  - Don't delete AutoEditor.exe, ffmpeg.exe, caption.ttf, or the "out" folder
-    - the app needs them.
+  - Finished renders download directly in your browser and are auto-saved to:
+    <your Downloads>\AutoEditor\
