@@ -1981,6 +1981,24 @@
     { id: "snap_yellow", label: "🟡 Snap Yellow", nativeMatch: "yellow" }
   ];
 
+  // Intercept URL.createObjectURL to reliably capture any voiceover audio file
+  try {
+    const _origCreateObjectURL = URL.createObjectURL;
+    URL.createObjectURL = function(obj) {
+      try {
+        if (obj && (obj instanceof Blob || obj instanceof File)) {
+          const isAudio = (obj.type && obj.type.startsWith("audio/")) ||
+                          (obj.name && obj.name.match(/\.(mp3|wav|m4a|aac|ogg|flac)$/i));
+          if (isAudio) {
+            window._autoEditorVoiceover = obj;
+            console.log("AutoEditor Captions: Cached voiceover audio file:", obj.name || "audio blob");
+          }
+        }
+      } catch (e) {}
+      return _origCreateObjectURL.apply(this, arguments);
+    };
+  } catch (e) {}
+
   function init() {
     console.log("Initializing AutoEditor Auto-Captions & Transcribe Extension (64 Presets + In-Editor Sync)...");
     
@@ -1991,7 +2009,7 @@
     removeUnwantedLinks();
 
     injectHeaderButton();
-    createModal();
+    ensureModal();
     checkServerHealth();
     fetchRemoteStyles();
     
@@ -1999,13 +2017,16 @@
     setInterval(checkServerHealth, 4000);
     setInterval(watchEditorUI, 500);
 
-    // Watch for DOM changes
+    // Watch for DOM changes (React hydration / navigation)
     const observer = new MutationObserver(() => {
       removeUnwantedLinks();
       injectHeaderButton();
+      ensureModal();
       watchEditorUI();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   // Remove Discord and Extension links
@@ -2110,6 +2131,8 @@
   // Watch for In-Editor Captions panel elements
   function watchEditorUI() {
     removeUnwantedLinks();
+    ensureModal();
+    injectHeaderButton();
 
     // 1. Check for empty captions state in editor sidebar
     const capEmpty = document.querySelector(".panel.captions .cap-empty");
@@ -2188,17 +2211,20 @@
   // Handle "Create Automatic Captions" directly from in-editor panel
   async function handleInEditorGenerateCaptions(btn) {
     if (!btn) return;
+
+    // Check if voiceover audio is available
+    let audioFile = await getVoiceoverAudio();
+    if (!audioFile) {
+      // If voiceover is not yet captured, open the studio modal to Tab 1 so user can immediately import/drop it!
+      openModal();
+      switchTab(1);
+      return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = `<span class="cap-ai-spin">⏳</span> <span>Generating captions with Whisper AI...</span>`;
 
     try {
-      const audioFile = await getVoiceoverAudio();
-      if (!audioFile) {
-        alert("No voiceover audio found.\nPlease import your voiceover MP3 or WAV audio first.");
-        btn.disabled = false;
-        btn.innerHTML = `<span class="cap-ai-btn-icon">✨</span> <span class="cap-ai-btn-text">Create Automatic Captions</span>`;
-        return;
-      }
 
       const formData = new FormData();
       formData.append("audio", audioFile);
@@ -2285,21 +2311,50 @@
   }
 
   function injectHeaderButton() {
-    const actionsBar = document.querySelector(".bar__actions");
-    if (actionsBar && !document.getElementById("btn-auto-captions")) {
-      const btn = document.createElement("button");
-      btn.id = "btn-auto-captions";
-      btn.className = "cap-magic-btn";
-      btn.innerHTML = "<span>✨</span><span>Auto Captions & Transcribe</span>";
-      btn.onclick = openModal;
+    const existing = document.getElementById("btn-auto-captions");
+    const actionsBar = document.querySelector(".bar__actions") || document.querySelector(".bar");
+    if (!actionsBar) return;
+
+    if (existing) {
+      if (actionsBar.contains(existing)) {
+        return;
+      }
+      existing.remove();
+    }
+
+    const btn = document.createElement("button");
+    btn.id = "btn-auto-captions";
+    btn.type = "button";
+    btn.className = "cap-magic-btn";
+    btn.innerHTML = "<span>✨</span><span>Auto Captions & Transcribe</span>";
+    btn.onclick = openModal;
+
+    if (actionsBar.firstChild) {
       actionsBar.insertBefore(btn, actionsBar.firstChild);
+    } else {
+      actionsBar.appendChild(btn);
     }
   }
 
   function createModal() {
-    if (document.getElementById("cap-modal-root")) return;
+    let root = document.getElementById("cap-modal-root");
+    let overlay = document.getElementById("cap-modal-overlay");
+    const inBody = !!(document.body && root && (typeof document.body.contains === "function" ? document.body.contains(root) : true));
+    if (root && overlay && inBody) {
+      return;
+    }
+    if (root) {
+      try {
+        if (typeof root.remove === "function") {
+          root.remove();
+        } else if (root.parentNode && typeof root.parentNode.removeChild === "function") {
+          root.parentNode.removeChild(root);
+        }
+      } catch (e) {}
+    }
+    if (!document.body) return;
 
-    const root = document.createElement("div");
+    root = document.createElement("div");
     root.id = "cap-modal-root";
     root.innerHTML = `
       <div id="cap-modal-overlay" class="cap-modal-overlay" style="display: none;">
@@ -2433,38 +2488,50 @@
     document.body.appendChild(root);
 
     // Event listeners
-    document.getElementById("cap-btn-close").onclick = closeModal;
-    document.getElementById("cap-modal-overlay").onclick = (e) => {
-      if (e.target.id === "cap-modal-overlay") closeModal();
-    };
+    const closeBtn = root.querySelector("#cap-btn-close");
+    if (closeBtn) closeBtn.onclick = closeModal;
 
-    document.getElementById("cap-tab-1-btn").onclick = () => switchTab(1);
-    document.getElementById("cap-tab-2-btn").onclick = () => switchTab(2);
+    const modalOverlay = root.querySelector("#cap-modal-overlay");
+    if (modalOverlay) {
+      modalOverlay.onclick = (e) => {
+        if (e.target.id === "cap-modal-overlay") closeModal();
+      };
+    }
 
-    const chooseBtn = document.getElementById("cap-btn-choose-file");
-    const audioInput = document.getElementById("cap-audio-input");
-    chooseBtn.onclick = () => audioInput.click();
-    audioInput.onchange = (e) => {
-      if (e.target.files && e.target.files[0]) {
-        window._autoEditorVoiceover = e.target.files[0];
-        handleAudioUpload(e.target.files[0]);
-      }
-    };
+    const tab1Btn = root.querySelector("#cap-tab-1-btn");
+    if (tab1Btn) tab1Btn.onclick = () => switchTab(1);
 
-    const dz = document.getElementById("cap-dropzone");
-    dz.ondragover = (e) => { e.preventDefault(); dz.style.borderColor = "#a855f7"; };
-    dz.ondragleave = () => { dz.style.borderColor = "#232936"; };
-    dz.ondrop = (e) => {
-      e.preventDefault();
-      dz.style.borderColor = "#232936";
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        window._autoEditorVoiceover = e.dataTransfer.files[0];
-        handleAudioUpload(e.dataTransfer.files[0]);
-      }
-    };
+    const tab2Btn = root.querySelector("#cap-tab-2-btn");
+    if (tab2Btn) tab2Btn.onclick = () => switchTab(2);
+
+    const chooseBtn = root.querySelector("#cap-btn-choose-file");
+    const audioInput = root.querySelector("#cap-audio-input");
+    if (chooseBtn && audioInput) {
+      chooseBtn.onclick = () => audioInput.click();
+      audioInput.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+          window._autoEditorVoiceover = e.target.files[0];
+          handleAudioUpload(e.target.files[0]);
+        }
+      };
+    }
+
+    const dz = root.querySelector("#cap-dropzone");
+    if (dz) {
+      dz.ondragover = (e) => { e.preventDefault(); dz.style.borderColor = "#a855f7"; };
+      dz.ondragleave = () => { dz.style.borderColor = "#232936"; };
+      dz.ondrop = (e) => {
+        e.preventDefault();
+        dz.style.borderColor = "#232936";
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          window._autoEditorVoiceover = e.dataTransfer.files[0];
+          handleAudioUpload(e.dataTransfer.files[0]);
+        }
+      };
+    }
 
     // Apply to Video Editor button in Tab 1
-    const applyFromTab1Btn = document.getElementById("cap-btn-apply-transcript-editor");
+    const applyFromTab1Btn = root.querySelector("#cap-btn-apply-transcript-editor");
     if (applyFromTab1Btn) {
       applyFromTab1Btn.onclick = () => {
         if (!currentTranscript || !currentTranscript.segments) {
@@ -2482,25 +2549,40 @@
       };
     }
 
-    document.getElementById("cap-preview-play-btn").onclick = togglePlayback;
-    document.getElementById("cap-btn-apply-captions").onclick = applyCaptionsToVideo;
+    const playBtn = root.querySelector("#cap-preview-play-btn");
+    if (playBtn) playBtn.onclick = togglePlayback;
+
+    const applyCaptionsBtn = root.querySelector("#cap-btn-apply-captions");
+    if (applyCaptionsBtn) applyCaptionsBtn.onclick = applyCaptionsToVideo;
 
     // Search input handler
-    document.getElementById("cap-style-search").oninput = (e) => {
-      searchQuery = e.target.value.toLowerCase().trim();
-      renderStyleCards();
-    };
+    const searchInput = root.querySelector("#cap-style-search");
+    if (searchInput) {
+      searchInput.oninput = (e) => {
+        searchQuery = e.target.value.toLowerCase().trim();
+        renderStyleCards();
+      };
+    }
 
     renderCategoryPills();
     renderStyleCards();
   }
 
+  function ensureModal() {
+    createModal();
+    return document.getElementById("cap-modal-overlay");
+  }
+
   function openModal() {
-    const overlay = document.getElementById("cap-modal-overlay");
+    const overlay = ensureModal();
     if (overlay) {
       overlay.style.display = "flex";
+      overlay.style.setProperty("display", "flex", "important");
+      overlay.style.setProperty("visibility", "visible", "important");
+      overlay.style.setProperty("opacity", "1", "important");
+      overlay.style.setProperty("z-index", "999999", "important");
+      overlay.classList.add("is-open");
       checkServerHealth();
-      // Auto-detect project voiceover if available and not yet loaded
       if (!currentTranscript) {
         getVoiceoverAudio().then(f => {
           if (f && !audioElement) {
@@ -2508,12 +2590,18 @@
           }
         });
       }
+    } else {
+      console.error("AutoEditor Captions: Could not open modal overlay.");
     }
   }
 
   function closeModal() {
     const overlay = document.getElementById("cap-modal-overlay");
-    if (overlay) overlay.style.display = "none";
+    if (overlay) {
+      overlay.style.display = "none";
+      overlay.style.setProperty("display", "none", "important");
+      overlay.classList.remove("is-open");
+    }
     if (audioElement && !audioElement.paused) {
       audioElement.pause();
       cancelAnimationFrame(animFrame);
@@ -2887,6 +2975,52 @@
       alert("Could not apply captions: " + err.message);
     }
   }
+
+  // Global Event Delegation (useCapture = true catches clicks before any React stopPropagation)
+  document.addEventListener("click", function(e) {
+    const target = e.target;
+    if (!target) return;
+
+    // 1. Top Bar Auto Captions & Transcribe button
+    const magicBtn = target.closest("#btn-auto-captions") || target.closest(".cap-magic-btn");
+    if (magicBtn && !magicBtn.closest("#cap-modal-root")) {
+      e.preventDefault();
+      e.stopPropagation();
+      openModal();
+      return;
+    }
+
+    // 2. In-editor Create Automatic Captions button
+    const editorBtn = target.closest("#btn-editor-auto-captions") || target.closest(".cap-ai-generate-btn");
+    if (editorBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleInEditorGenerateCaptions(editorBtn);
+      return;
+    }
+
+    // 3. In-editor Browse All (64)... studio link
+    const studioLink = target.closest("#btn-open-full-presets-studio") || target.closest(".cap-editor-studio-link");
+    if (studioLink) {
+      e.preventDefault();
+      e.stopPropagation();
+      openModal();
+      switchTab(2);
+      return;
+    }
+
+    // 4. Modal backdrop click to close
+    if (target.id === "cap-modal-overlay") {
+      closeModal();
+      return;
+    }
+
+    // 5. Close button
+    if (target.id === "cap-btn-close" || target.closest("#cap-btn-close")) {
+      closeModal();
+      return;
+    }
+  }, true);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

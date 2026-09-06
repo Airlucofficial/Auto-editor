@@ -166,8 +166,9 @@ class AutoEditorHandler(BaseHTTPRequestHandler):
 
                 # Handle multipart or raw body or JSON with filepath
                 if "multipart/form-data" in content_type:
-                    # Parse multipart boundary
-                    boundary = content_type.split("boundary=")[-1].strip().encode()
+                    # Parse multipart boundary safely
+                    boundary_str = content_type.split("boundary=")[-1].split(";")[0].strip().strip('"').strip("'")
+                    boundary = boundary_str.encode("utf-8")
                     body = self.rfile.read(content_len)
                     
                     parts = body.split(b"--" + boundary)
@@ -175,7 +176,12 @@ class AutoEditorHandler(BaseHTTPRequestHandler):
                     for part in parts:
                         if b'filename="' in part:
                             header, data = part.split(b"\r\n\r\n", 1)
-                            data = data.rstrip(b"\r\n")
+                            if data.endswith(b"\r\n"):
+                                data = data[:-2]
+                            elif data.endswith(b"--\r\n"):
+                                data = data[:-4]
+                            elif data.endswith(b"--"):
+                                data = data[:-2]
                             with open(upload_audio_path, "wb") as f:
                                 f.write(data)
                             saved = True

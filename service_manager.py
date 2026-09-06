@@ -118,6 +118,15 @@ def get_startupinfo():
 
 def is_autoeditor_running() -> bool:
     try:
+        # 1. First probe port 4000 directly (instant and reliable)
+        req = urllib.request.Request("http://127.0.0.1:4000", headers={"Connection": "close"})
+        with urllib.request.urlopen(req, timeout=0.6) as res:
+            if res.status in (200, 301, 302, 404):
+                return True
+    except Exception:
+        pass
+
+    try:
         res = subprocess.run(
             ["tasklist", "/FI", "IMAGENAME eq AutoEditor.exe", "/FO", "CSV", "/NH"],
             capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
@@ -192,13 +201,18 @@ def spawn_api_server() -> int:
     cmd = [PYTHONW_EXE, api_script, str(PORT)]
     cmd_str = ' '.join(cmd)
     log(f"Spawning API server headlessly: {cmd_str}")
+    api_log_path = os.path.join(STORAGE_DIR, "api_server.log")
+    try:
+        api_log_file = open(api_log_path, "a", encoding="utf-8")
+    except Exception:
+        api_log_file = subprocess.DEVNULL
     proc = subprocess.Popen(
         cmd,
         cwd=BASE_DIR,
         startupinfo=get_startupinfo(),
         creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stdout=api_log_file,
+        stderr=api_log_file
     )
     write_pid(API_PID_FILE, proc.pid)
     log(f"API server spawned headlessly with PID: {proc.pid}")
@@ -255,8 +269,9 @@ def run_supervisor():
             else:
                 consecutive_ae_missing += 1
 
-            if autoeditor_seen and consecutive_ae_missing >= 3:
-                log("AutoEditor.exe has stopped. Automatically shutting down AI Engine...")
+            # Auto-shutdown watchdog: only terminate if AutoEditor was running and has been confirmed absent for at least 60s
+            if autoeditor_seen and consecutive_ae_missing >= 60:
+                log("AutoEditor.exe and port 4000 have stopped for 60s. Automatically shutting down AI Engine...")
                 handle_exit(0, None)
                 break
 
@@ -351,6 +366,9 @@ def run_supervisor():
 
     except KeyboardInterrupt:
         handle_exit(0, None)
+    except Exception as e:
+        import traceback
+        log(f"Supervisor unhandled exception: {e}\n{traceback.format_exc()}")
     finally:
         remove_file(SUPERVISOR_PID_FILE)
         log("Supervisor exited.")
@@ -368,17 +386,21 @@ def start_command():
     manager_script = os.path.abspath(__file__)
     cmd = [PYTHONW_EXE, manager_script, "run-supervisor"]
     
+    try:
+        sup_log_file = open(LOG_FILE, "a", encoding="utf-8")
+    except Exception:
+        sup_log_file = subprocess.DEVNULL
     proc = subprocess.Popen(
         cmd,
         cwd=BASE_DIR,
         startupinfo=get_startupinfo(),
         creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stdout=sup_log_file,
+        stderr=sup_log_file
     )
 
     print(f"Launched background supervisor (PID: {proc.pid}). Waiting for AI Engine to become ready...")
-    for _ in range(12):
+    for _ in range(16):
         time.sleep(0.5)
         health = check_health(timeout=1.0)
         if health:

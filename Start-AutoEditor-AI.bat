@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 title AutoEditor (v2 + AI Studio)
 cd /d "%~dp0"
 
@@ -18,13 +18,9 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-:: Start Background AI Service silently without opening console windows
+:: Start Background AI Service silently without opening extra console windows
 echo [1/2] Starting AutoEditor AI Engine background service...
-if exist ".venv\Scripts\pythonw.exe" (
-    .venv\Scripts\pythonw.exe service_manager.py start
-) else (
-    .venv\Scripts\python.exe service_manager.py start
-)
+.venv\Scripts\python.exe service_manager.py start
 
 :: Start Main AutoEditor on port 4000
 echo [2/2] Launching AutoEditor Desktop Server on port 4000...

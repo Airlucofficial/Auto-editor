@@ -16,47 +16,58 @@
 
 
 .cap-magic-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%) !important;
   color: #ffffff !important;
-  font-weight: 600;
-  font-size: 13px;
-  padding: 8px 16px;
-  border-radius: 9999px;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  text-decoration: none;
-  user-select: none;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 8px 16px !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  text-decoration: none !important;
+  user-select: none !important;
+  position: relative !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
 }
 .cap-magic-btn:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
-  filter: brightness(1.1);
+  transform: translateY(-1px) scale(1.02) !important;
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5) !important;
+  filter: brightness(1.1) !important;
 }
 .cap-magic-btn:active {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0) scale(0.98) !important;
 }
 
 /* Modal Backdrop */
 .cap-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(8, 10, 15, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: 99999;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(8, 10, 15, 0.88) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  z-index: 999999 !important;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
   animation: capFadeIn 0.25s ease-out;
+}
+.cap-modal-overlay[style*="display: none"] {
+  display: none !important;
+}
+.cap-modal-overlay.is-open {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @keyframes capFadeIn {
