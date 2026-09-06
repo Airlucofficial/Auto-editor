@@ -12,6 +12,20 @@ Handles:
 
 import os
 import sys
+
+# Ensure stdout and stderr are valid streams under pythonw (where they default to None)
+if sys.stdout is None or not hasattr(sys.stdout, "write"):
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+if sys.stderr is None or not hasattr(sys.stderr, "write"):
+    try:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import json
 import uuid
 import shutil
@@ -23,11 +37,16 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import transcribe_engine
 
+
 PORT = 4001
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 class AutoEditorHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Headless mode: suppress or write to devnull safely
+        pass
+
     def send_json_response(self, status_code: int, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)

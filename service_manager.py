@@ -14,6 +14,19 @@ import urllib.request
 import subprocess
 from datetime import datetime
 
+# Ensure stdout and stderr are valid streams under pythonw (where they default to None)
+if sys.stdout is None or not hasattr(sys.stdout, "write"):
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+if sys.stderr is None or not hasattr(sys.stderr, "write"):
+    try:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Configure UTF-8 encoding for Windows console to handle status emojis
 if sys.platform == "win32":
     try:
@@ -23,6 +36,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STORAGE_DIR = os.path.join(BASE_DIR, "storage")
@@ -94,16 +108,38 @@ def is_pid_alive(pid: int) -> bool:
     except Exception:
         return False
 
+def get_startupinfo():
+    if sys.platform == "win32":
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+        return si
+    return None
+
+def is_autoeditor_running() -> bool:
+    try:
+        res = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq AutoEditor.exe", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
+        )
+        for line in res.stdout.strip().splitlines():
+            if "AutoEditor.exe" in line:
+                return True
+        return False
+    except Exception:
+        return True
+
 def kill_pid(pid: int):
     if not pid or pid <= 0:
         return
     try:
         subprocess.run(
-            ["taskkill", "/F", "/PID", str(pid)],
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
             capture_output=True, creationflags=CREATE_NO_WINDOW
         )
     except Exception:
         pass
+
 
 def free_port(port: int = PORT):
     try:
@@ -153,18 +189,19 @@ def remove_file(path: str):
 def spawn_api_server() -> int:
     free_port(PORT)
     api_script = os.path.join(BASE_DIR, "api_server.py")
-    cmd = [PYTHON_EXE, api_script, str(PORT)]
+    cmd = [PYTHONW_EXE, api_script, str(PORT)]
     cmd_str = ' '.join(cmd)
-    log(f"Spawning API server: {cmd_str}")
+    log(f"Spawning API server headlessly: {cmd_str}")
     proc = subprocess.Popen(
         cmd,
         cwd=BASE_DIR,
+        startupinfo=get_startupinfo(),
         creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
     write_pid(API_PID_FILE, proc.pid)
-    log(f"API server spawned with PID: {proc.pid}")
+    log(f"API server spawned headlessly with PID: {proc.pid}")
     return proc.pid
 
 def run_supervisor():
@@ -203,9 +240,26 @@ def run_supervisor():
                 log("API server healthy on initial spawn.")
                 break
 
+    autoeditor_seen = False
+    consecutive_ae_missing = 0
+
     try:
         while True:
             time.sleep(1.0)
+            
+            # Auto-shutdown watchdog: if AutoEditor was running and is now stopped, terminate cleanly
+            ae_alive = is_autoeditor_running()
+            if ae_alive:
+                autoeditor_seen = True
+                consecutive_ae_missing = 0
+            else:
+                consecutive_ae_missing += 1
+
+            if autoeditor_seen and consecutive_ae_missing >= 3:
+                log("AutoEditor.exe has stopped. Automatically shutting down AI Engine...")
+                handle_exit(0, None)
+                break
+
             api_pid = read_pid(API_PID_FILE)
             pid_alive = is_pid_alive(api_pid) if api_pid else False
 
@@ -317,6 +371,7 @@ def start_command():
     proc = subprocess.Popen(
         cmd,
         cwd=BASE_DIR,
+        startupinfo=get_startupinfo(),
         creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
