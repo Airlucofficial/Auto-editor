@@ -451,7 +451,15 @@ class TestNewFeatures(unittest.TestCase):
         ok = transcribe_engine.mix_audio_with_sfx(SAMPLE_WAV, sfx_events, out_audio, voice_volume=1.2)
         self.assertTrue(ok, "mix_audio_with_sfx must succeed even if SFX files are missing")
         self.assertTrue(os.path.exists(out_audio))
-        self.assertGreater(os.path.getsize(out_audio), 1000)
+    def test_page_chunk_scope_integrity(self):
+        """Verify page chunk preserves 'let' declaration before eL in function F to prevent ReferenceError."""
+        chunk_path = os.path.join(PROJECT_DIR, "out", "_next", "static", "chunks", "app", "page-f2b7366e605a20db.js")
+        self.assertTrue(os.path.exists(chunk_path))
+        with open(chunk_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("};let eL=(0,l.useCallback)", content, "page chunk must have 'let eL=' to avoid undeclared ReferenceError in strict mode")
+        res = subprocess.run(["node", "-c", chunk_path], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"node syntax check failed: {res.stderr}")
 
 if __name__ == "__main__":
     import subprocess

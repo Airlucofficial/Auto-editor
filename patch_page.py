@@ -55,7 +55,7 @@ r_hist = (
     "window._REACT_CAN_UNDO=()=>eM;"
     "window._REACT_CAN_REDO=()=>eS;"
     "window._CAPTIONS_ON=Y;"
-    "};"
+    "};let "
 )
 text = text.replace(s_hist, r_hist, 1)
 
