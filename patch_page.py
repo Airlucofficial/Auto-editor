@@ -13,6 +13,15 @@ file_path = "out/_next/static/chunks/app/page-f2b7366e605a20db.js"
 with open(file_path, "r", encoding="utf-8") as f:
     text = f.read()
 
+# Idempotency check: if already patched and scope integrity is preserved, exit cleanly
+if (
+    "window._CANVAS_REDRAW" in text
+    and "};let eL=(0,l.useCallback)" in text
+    and "window._SET_REACT_CAPTION_STYLE" in text
+):
+    print("Page chunk is already patched and scope integrity is verified.")
+    exit(0)
+
 # 1. Canvas Redraw hook
 s_redraw = "(0,l.useEffect)(()=>{eP.current=tu},[tu])"
 assert s_redraw in text, "s_redraw target not found"
