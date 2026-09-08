@@ -2241,35 +2241,93 @@
     window._GET_SMART_SFX = getSmartAutoSFX;
   }
 
-  // Web Audio Master Voiceover Volume Booster (0% to 200%)
+  // Web Audio Master Voiceover Volume Booster (0% to 200%) & Playback Engine
   let _voiceAudioCtx = null;
   let _voiceGainNode = null;
   let _voiceSourceNode = null;
 
+  // Silent audio generator for running timeline without voiceover
+  function createSilentAudioUrl(durationSec = 60) {
+    try {
+      const sampleRate = 8000;
+      const numSamples = Math.ceil(sampleRate * Math.min(3600, durationSec || 60));
+      const buffer = new ArrayBuffer(44 + numSamples * 2);
+      const view = new DataView(buffer);
+      view.setUint32(0, 0x52494646, false); // 'RIFF'
+      view.setUint32(4, 36 + numSamples * 2, true);
+      view.setUint32(8, 0x57415645, false); // 'WAVE'
+      view.setUint32(12, 0x666d7420, false); // 'fmt '
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      view.setUint32(36, 0x64617461, false); // 'data'
+      view.setUint32(40, numSamples * 2, true);
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // Ensure audio is unmuted and AudioContext is resumed on user interaction
+  function ensureEditorAudioReady() {
+    const audioEl = window._VOICEOVER_AUDIO_EL || document.querySelector("audio");
+    if (audioEl) {
+      audioEl.muted = ((window._VOICEOVER_VOLUME !== undefined ? window._VOICEOVER_VOLUME : 1.0) <= 0);
+      if (!audioEl.src || audioEl.src === window.location.href || audioEl.src.endsWith("/")) {
+        if (!window._silentClockUrl) {
+          window._silentClockUrl = createSilentAudioUrl(Math.max(60, window._TIMELINE_DURATION || 60));
+        }
+        audioEl.src = window._silentClockUrl;
+      }
+    }
+    if (_voiceAudioCtx && _voiceAudioCtx.state === "suspended") {
+      _voiceAudioCtx.resume().catch(() => {});
+    }
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", ensureEditorAudioReady, { passive: true });
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        ensureEditorAudioReady();
+      }
+    }, { passive: true });
+  }
+
   function setMasterVoiceVolume(v) {
     window._VOICEOVER_VOLUME = v;
-    const audioEl = document.querySelector("audio");
+    const audioEl = window._VOICEOVER_AUDIO_EL || document.querySelector("audio");
     if (!audioEl) return;
     try {
-      if (!_voiceAudioCtx) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) _voiceAudioCtx = new AudioCtx();
-      }
-      if (_voiceAudioCtx && !_voiceSourceNode && !audioEl._hasVoiceSource) {
-        audioEl._hasVoiceSource = true;
-        _voiceSourceNode = _voiceAudioCtx.createMediaElementSource(audioEl);
-        _voiceGainNode = _voiceAudioCtx.createGain();
-        _voiceSourceNode.connect(_voiceGainNode);
-        _voiceGainNode.connect(_voiceAudioCtx.destination);
-      }
-      if (_voiceGainNode) {
-        if (_voiceAudioCtx.state === "suspended") {
-          _voiceAudioCtx.resume();
-        }
-        _voiceGainNode.gain.setValueAtTime(Math.max(0, v), _voiceAudioCtx.currentTime);
-        audioEl.volume = 1.0;
-      } else {
+      audioEl.muted = (v <= 0);
+      if (v <= 1.0) {
         audioEl.volume = Math.max(0, Math.min(1.0, v));
+      } else {
+        if (!_voiceAudioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) _voiceAudioCtx = new AudioCtx();
+        }
+        if (_voiceAudioCtx && !_voiceSourceNode && !audioEl._hasVoiceSource) {
+          audioEl._hasVoiceSource = true;
+          _voiceSourceNode = _voiceAudioCtx.createMediaElementSource(audioEl);
+          _voiceGainNode = _voiceAudioCtx.createGain();
+          _voiceSourceNode.connect(_voiceGainNode);
+          _voiceGainNode.connect(_voiceAudioCtx.destination);
+        }
+        if (_voiceGainNode) {
+          if (_voiceAudioCtx.state === "suspended") {
+            _voiceAudioCtx.resume().catch(() => {});
+          }
+          _voiceGainNode.gain.setValueAtTime(v, _voiceAudioCtx.currentTime);
+          audioEl.volume = 1.0;
+        } else {
+          audioEl.volume = 1.0;
+        }
       }
     } catch (e) {
       audioEl.volume = Math.max(0, Math.min(1.0, v));
@@ -3671,6 +3729,19 @@
     updateTimelineSpeedBadges();
     setupAudioPlaybackWatchers();
 
+    // CapCut Desktop Video Editor UI/UX Overhaul
+    injectWindowExpandButton();
+    injectHeaderExportButton();
+    injectHeaderProjectInfo();
+    injectCapCutTimelineToolbar();
+    updateCapCutTimecode();
+    injectCapCutMultiTrackGutter();
+    injectCapCutCaptionsTimelineLane();
+    injectCapCutSFXTimelineLane();
+    enhanceOnboardingScreen();
+    injectAspectControls();
+    ensureEditorAudioReady();
+
     // 1. Check for empty captions state in editor sidebar
     const capEmpty = document.querySelector(".panel.captions .cap-empty");
     if (capEmpty && !document.getElementById("btn-editor-auto-captions")) {
@@ -3710,6 +3781,617 @@
     // 8. Inject Transition Sound Effects section with Smart Auto-Selection
     injectTransitionSoundEffects();
   }
+
+
+  
+  
+  
+  // === CAPCUT DESKTOP VIDEO EDITOR CONTROLLER OVERHAUL ===
+  // 0. 9:16 Vertical Video Editing & Screen Recording Mode
+  function setProjectAspect(aspect) {
+    if (window._SET_ASPECT) {
+      window._SET_ASPECT(aspect);
+    }
+    const select = document.querySelector('.ctrl select');
+    if (select && select.value !== aspect) {
+      select.value = aspect;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    applyAspectUI(aspect);
+    if (window._CANVAS_REDRAW) {
+      window._CANVAS_REDRAW();
+    }
+  }
+
+  function applyAspectUI(aspect) {
+    const isVert = (aspect === "9:16");
+    const editor = document.querySelector(".editor");
+    if (editor) {
+      editor.classList.toggle("cap-vertical-mode", isVert);
+    }
+    if (typeof document !== "undefined") {
+      document.body.classList.toggle("cap-vertical-mode", isVert);
+    }
+
+    const aspectBtn = document.getElementById("btn-aspect-toggle");
+    if (aspectBtn) {
+      aspectBtn.classList.toggle("is-vertical", isVert);
+      aspectBtn.innerHTML = isVert 
+        ? `<span>🖥️</span><span>16:9 Landscape</span>`
+        : `<span>📱</span><span>9:16 Vertical</span>`;
+      aspectBtn.title = isVert 
+        ? "Switch to 16:9 Landscape YouTube Widescreen Mode" 
+        : "Switch to 9:16 Vertical Shorts/Reels/TikTok Video Mode";
+    }
+
+    const pill = document.querySelector(".cap-header-project-pill");
+    if (pill) {
+      pill.innerHTML = isVert 
+        ? `<span>📱</span><span>AutoEditor Pro &middot; 9:16 1080×1920 (Vertical)</span>`
+        : `<span>🎬</span><span>AutoEditor Pro &middot; 1080p 30fps</span>`;
+    }
+
+    const ratioPill = document.getElementById("btn-ratio-pill");
+    if (ratioPill) {
+      ratioPill.innerHTML = isVert ? `<span>📱</span><span>9:16</span>` : `<span>🖥️</span><span>16:9</span>`;
+    }
+  }
+
+  function injectAspectControls() {
+    const barActions = document.querySelector(".bar__actions");
+    if (barActions) {
+      let aspectBtn = document.getElementById("btn-aspect-toggle");
+      if (!aspectBtn) {
+        aspectBtn = document.createElement("button");
+        aspectBtn.type = "button";
+        aspectBtn.id = "btn-aspect-toggle";
+        aspectBtn.className = "cap-aspect-toggle-btn";
+        aspectBtn.innerHTML = `<span>📱</span><span>9:16 Vertical</span>`;
+        aspectBtn.title = "Switch to 9:16 Vertical Video Mode (Shorts / Reels / TikTok)";
+        aspectBtn.onclick = () => {
+          const current = (window._GET_ASPECT ? window._GET_ASPECT() : window._ASPECT) || "16:9";
+          const next = (current === "9:16") ? "16:9" : "9:16";
+          setProjectAspect(next);
+        };
+
+        const expandBtn = document.getElementById("btn-window-expand");
+        if (expandBtn) {
+          barActions.insertBefore(aspectBtn, expandBtn);
+        } else {
+          barActions.appendChild(aspectBtn);
+        }
+      }
+    }
+
+    // Transport ratio pill
+    const transport = document.querySelector(".transport");
+    if (transport && !document.getElementById("btn-ratio-pill")) {
+      const ratioPill = document.createElement("button");
+      ratioPill.type = "button";
+      ratioPill.id = "btn-ratio-pill";
+      ratioPill.className = "cap-ratio-pill";
+      ratioPill.title = "Toggle Aspect Ratio (16:9 Landscape ↔ 9:16 Vertical)";
+      ratioPill.innerHTML = `<span>🖥️</span><span>16:9</span>`;
+      ratioPill.onclick = () => {
+        const current = (window._GET_ASPECT ? window._GET_ASPECT() : window._ASPECT) || "16:9";
+        const next = (current === "9:16") ? "16:9" : "9:16";
+        setProjectAspect(next);
+      };
+
+      const fullViewBtn = document.getElementById("btn-fullscreen-toggle");
+      if (fullViewBtn) {
+        transport.insertBefore(ratioPill, fullViewBtn);
+      } else {
+        transport.appendChild(ratioPill);
+      }
+    }
+
+    // Sync from Inspector select
+    const select = document.querySelector('.ctrl select');
+    if (select && !select._hasAspectSync) {
+      select._hasAspectSync = true;
+      select.addEventListener("change", (e) => {
+        applyAspectUI(e.target.value);
+        if (window._SET_ASPECT) {
+          window._SET_ASPECT(e.target.value);
+        }
+        if (window._CANVAS_REDRAW) {
+          window._CANVAS_REDRAW();
+        }
+      });
+      if (select.value === "9:16") {
+        applyAspectUI("9:16");
+      }
+    }
+  }
+
+  // 1. Expand / Fullscreen Window Toggle Button
+  function injectWindowExpandButton() {
+    const barActions = document.querySelector(".bar__actions");
+    if (!barActions) return;
+
+    let btn = document.getElementById("btn-window-expand");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "btn-window-expand";
+      btn.className = "cap-window-expand-btn";
+      btn.title = "Expand / Fullscreen Editor Window";
+      btn.innerHTML = `<span style="font-size:13px;">⛶</span><span>Expand Window</span>`;
+
+      btn.onclick = () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+          btn.innerHTML = `<span style="font-size:13px;">🗗</span><span>Restore Window</span>`;
+          btn.title = "Restore Window (Esc)";
+        } else {
+          document.exitFullscreen().catch(() => {});
+          btn.innerHTML = `<span style="font-size:13px;">⛶</span><span>Expand Window</span>`;
+          btn.title = "Expand / Fullscreen Editor Window";
+        }
+      };
+
+      document.addEventListener("fullscreenchange", () => {
+        if (document.fullscreenElement) {
+          btn.innerHTML = `<span style="font-size:13px;">🗗</span><span>Restore Window</span>`;
+          btn.title = "Restore Window (Esc)";
+        } else {
+          btn.innerHTML = `<span style="font-size:13px;">⛶</span><span>Expand Window</span>`;
+          btn.title = "Expand / Fullscreen Editor Window";
+        }
+      });
+    }
+
+    const expBtn = document.getElementById("btn-capcut-header-export");
+    if (expBtn && btn.nextSibling !== expBtn) {
+      barActions.insertBefore(btn, expBtn);
+    } else if (!expBtn && btn.parentElement !== barActions) {
+      barActions.appendChild(btn);
+    }
+  }
+
+  // 2. CapCut Header Export Button
+  function injectHeaderExportButton() {
+    const barActions = document.querySelector(".bar__actions");
+    if (!barActions || document.getElementById("btn-capcut-header-export")) return;
+
+    const expBtn = document.createElement("button");
+    expBtn.type = "button";
+    expBtn.id = "btn-capcut-header-export";
+    expBtn.className = "cap-header-export-btn";
+    expBtn.title = "Export Rendered MP4 Video with Subtitles & Audio";
+    expBtn.innerHTML = `<span>🚀</span><span>Export Video</span>`;
+
+    expBtn.onclick = () => {
+      const renderBtn = document.querySelector(".render:not(.build)");
+      if (renderBtn) {
+        renderBtn.click();
+      } else {
+        alert("Please import storyboard media and build the timeline first.");
+      }
+    };
+
+    barActions.appendChild(expBtn);
+  }
+
+  // 3. CapCut Header Project Info & Aspect Ratio
+  function injectHeaderProjectInfo() {
+    const bar = document.querySelector(".bar");
+    if (!bar || document.getElementById("cap-header-project-info")) return;
+
+    const brand = bar.querySelector(".brand");
+    const barActions = bar.querySelector(".bar__actions");
+    if (!brand || !barActions) return;
+
+    const info = document.createElement("div");
+    info.id = "cap-header-project-info";
+    info.className = "cap-header-center";
+    info.innerHTML = `
+      <span class="cap-header-project-pill" title="Current Video Project Preset">
+        <span>🎬</span>
+        <span>AutoEditor Pro &middot; 1080p 30fps</span>
+      </span>
+    `;
+
+    bar.insertBefore(info, barActions);
+  }
+
+  // 4. CapCut Timeline Control Toolbar
+  function injectCapCutTimelineToolbar() {
+    const tl = document.querySelector(".tl");
+    if (!tl || document.getElementById("cap-timeline-toolbar")) return;
+
+    const rulerRow = tl.querySelector(".tl__row--ruler");
+    if (!rulerRow) return;
+
+    const toolbar = document.createElement("div");
+    toolbar.id = "cap-timeline-toolbar";
+    toolbar.className = "cap-tl-toolbar";
+
+    toolbar.innerHTML = `
+      <div class="cap-tl-tools-left">
+        <span class="cap-tl-timecode" id="cap-tl-timecode-display">00:00:00:00</span>
+        <span class="cap-tl-divider"></span>
+        <button type="button" class="cap-tl-tool-btn" id="cap-tl-btn-split" title="Split clip at playhead position">
+          <span>✂️</span><span>Split</span>
+        </button>
+        <button type="button" class="cap-tl-tool-btn" id="cap-tl-btn-delete" title="Delete selected clip">
+          <span>🗑️</span><span>Delete</span>
+        </button>
+        <button type="button" class="cap-tl-tool-btn" id="cap-tl-btn-undo" title="Step Back / Undo (Ctrl+Z)">
+          <span>↶</span><span>Undo</span>
+        </button>
+        <button type="button" class="cap-tl-tool-btn" id="cap-tl-btn-redo" title="Step Forward / Redo (Ctrl+Y)">
+          <span>↷</span><span>Redo</span>
+        </button>
+        <button type="button" class="cap-tl-tool-btn is-active" id="cap-tl-btn-snap" title="Magnetic Snapping">
+          <span>🧲</span><span>Snap</span>
+        </button>
+        <span class="cap-tl-badge-speed" title="Clips automatically scale to voiceover slots">⚡ Auto-Speed: 100% Sync</span>
+      </div>
+      <div class="cap-tl-tools-right">
+        <span class="cap-tl-zoom-label">🔍 Zoom:</span>
+        <button type="button" class="cap-tl-zoom-btn" id="cap-tl-zoom-out" title="Zoom Out">−</button>
+        <input type="range" id="cap-tl-zoom-slider" min="0.5" max="3.0" step="0.1" value="1.0" title="Timeline scale" />
+        <button type="button" class="cap-tl-zoom-btn" id="cap-tl-zoom-in" title="Zoom In">+</button>
+        <button type="button" class="cap-tl-zoom-fit-btn" id="cap-tl-zoom-fit" title="Fit Timeline to Window">↔ Fit</button>
+      </div>
+    `;
+
+    tl.insertBefore(toolbar, rulerRow);
+
+    // Zoom Controls
+    const zoomSlider = toolbar.querySelector("#cap-tl-zoom-slider");
+    const zoomOut = toolbar.querySelector("#cap-tl-zoom-out");
+    const zoomIn = toolbar.querySelector("#cap-tl-zoom-in");
+    const zoomFit = toolbar.querySelector("#cap-tl-zoom-fit");
+
+    const applyZoom = (val) => {
+      const clamped = Math.max(0.5, Math.min(3.0, val));
+      zoomSlider.value = clamped;
+      if (clamped === 1.0) {
+        tl.style.removeProperty("--tl-min");
+      } else {
+        const baseW = tl.clientWidth || 1000;
+        tl.style.setProperty("--tl-min", `${Math.round(baseW * clamped)}px`);
+      }
+    };
+
+    zoomSlider.oninput = (e) => applyZoom(parseFloat(e.target.value));
+    zoomOut.onclick = () => applyZoom(parseFloat(zoomSlider.value) - 0.25);
+    zoomIn.onclick = () => applyZoom(parseFloat(zoomSlider.value) + 0.25);
+    zoomFit.onclick = () => applyZoom(1.0);
+
+    // Undo / Redo
+    toolbar.querySelector("#cap-tl-btn-undo").onclick = () => {
+      if (window._REACT_UNDO) window._REACT_UNDO();
+      else StudioHistory.undo();
+    };
+    toolbar.querySelector("#cap-tl-btn-redo").onclick = () => {
+      if (window._REACT_REDO) window._REACT_REDO();
+      else StudioHistory.redo();
+    };
+
+    // Split / Delete
+    toolbar.querySelector("#cap-tl-btn-split").onclick = () => {
+      const activeCut = document.querySelector(".cut.is-sel") || document.querySelector(".cut:hover");
+      if (activeCut) {
+        activeCut.click();
+      } else {
+        const cuts = document.querySelectorAll(".cut");
+        if (cuts.length > 0) {
+          cuts[0].click();
+        } else {
+          const clip = document.querySelector(".clip.is-active") || document.querySelector(".clip");
+          if (clip) clip.click();
+        }
+      }
+    };
+
+    toolbar.querySelector("#cap-tl-btn-delete").onclick = () => {
+      // 1. If modal open, click danger delete
+      const modalDel = document.querySelector(".modal .mbtn--danger");
+      if (modalDel) {
+        modalDel.click();
+        return;
+      }
+      // 2. If clip active, remove
+      const selClip = document.querySelector(".clip.is-selected") || document.querySelector(".clip.is-active");
+      if (selClip) {
+        const removeBtn = selClip.querySelector(".clip__x") || selClip.querySelector("button");
+        if (removeBtn) {
+          removeBtn.click();
+          return;
+        }
+        selClip.click();
+      }
+    };
+  }
+
+  // 5. Update Timecode Display in Timeline Toolbar
+  function updateCapCutTimecode() {
+    const tc = document.getElementById("cap-tl-timecode-display");
+    if (!tc) return;
+    const timeNowEl = document.querySelector(".time__now");
+    if (timeNowEl && timeNowEl.innerText) {
+      const raw = timeNowEl.innerText.trim();
+      let parts = raw.split(":");
+      let min = 0, sec = 0, frac = 0;
+      if (parts.length === 2) {
+        min = parseInt(parts[0], 10) || 0;
+        let secParts = parts[1].split(".");
+        sec = parseInt(secParts[0], 10) || 0;
+        frac = secParts[1] ? parseInt(secParts[1], 10) : 0;
+      }
+      const pad = (n) => String(n).padStart(2, "0");
+      tc.innerText = `${pad(Math.floor(min / 60))}:${pad(min % 60)}:${pad(sec)}:${pad(frac * 3)}`;
+    }
+  }
+
+  // 6. CapCut Multi-Track Gutter Headers
+  function injectCapCutMultiTrackGutter() {
+    const gutter = document.querySelector(".tl__row:not(.tl__row--ruler):not(.tl__row--cuts) .tl__gutter");
+    if (!gutter) return;
+
+    // Track 1: Subtitles Track Gutter Tag
+    let subTag = document.getElementById("cap-tl-tag-subtitles");
+    if (!subTag) {
+      subTag = document.createElement("div");
+      subTag.id = "cap-tl-tag-subtitles";
+      subTag.className = "tl__tag tl__tag--subtitles";
+      subTag.title = "Subtitles & Synchronized Captions Track";
+      subTag.innerHTML = `
+        <div class="cap-tag-main">
+          <span class="cap-tag-icon">💬</span>
+          <span class="cap-tag-label">Subtitles</span>
+        </div>
+        <div class="cap-tag-actions">
+          <button type="button" class="cap-track-btn cap-btn-cue-vis" title="Toggle Subtitles Visibility">👁️</button>
+          <button type="button" class="cap-track-btn" title="Lock Subtitles Track">🔒</button>
+        </div>
+      `;
+      gutter.insertBefore(subTag, gutter.firstChild);
+
+      const visBtn = subTag.querySelector(".cap-btn-cue-vis");
+      if (visBtn) {
+        visBtn.onclick = (e) => {
+          e.stopPropagation();
+          window._SHOW_CAPTION_PREVIEW = !window._SHOW_CAPTION_PREVIEW;
+          if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+          visBtn.style.opacity = window._SHOW_CAPTION_PREVIEW ? "1" : "0.35";
+        };
+      }
+    }
+
+    // Track 2: Video Track Gutter Tag
+    const vTag = gutter.querySelector(".tl__tag:not(.tl__tag--audio):not(.tl__tag--subtitles):not(.tl__tag--sfx)");
+    if (vTag) {
+      if (!vTag.querySelector(".cap-tag-main")) {
+        vTag.id = "cap-tl-tag-video";
+        vTag.className = "tl__tag tl__tag--video";
+        vTag.innerHTML = `
+          <div class="cap-tag-main">
+            <span class="cap-tag-icon">🎬</span>
+            <span class="cap-tag-label">Video</span>
+          </div>
+          <div class="cap-tag-actions">
+            <button type="button" class="cap-track-btn" title="Toggle Video Visibility">👁️</button>
+            <button type="button" class="cap-track-btn" title="Lock Video Track">🔒</button>
+          </div>
+        `;
+        vTag.title = "Video Visuals & Motion Track (1080p)";
+      }
+    }
+
+    // Track 3: Audio Track Gutter Tag
+    const aTag = gutter.querySelector(".tl__tag--audio:not(.tl__tag--subtitles):not(.tl__tag--sfx)");
+    if (aTag) {
+      if (!aTag.querySelector(".cap-tag-main")) {
+        aTag.id = "cap-tl-tag-audio";
+        aTag.innerHTML = `
+          <div class="cap-tag-main">
+            <span class="cap-tag-icon">🎵</span>
+            <span class="cap-tag-label">Audio</span>
+          </div>
+          <div class="cap-tag-actions">
+            <button type="button" class="cap-track-btn cap-btn-aud-mute" title="Mute/Unmute Audio">🔊</button>
+            <button type="button" class="cap-track-btn" title="Lock Audio Track">🔒</button>
+          </div>
+        `;
+        aTag.title = "Master Voiceover Track (48kHz)";
+
+        const muteBtn = aTag.querySelector(".cap-btn-aud-mute");
+        if (muteBtn) {
+          muteBtn.onclick = (e) => {
+            e.stopPropagation();
+            const aud = window._VOICEOVER_AUDIO_EL || document.querySelector("audio");
+            if (aud) {
+              aud.muted = !aud.muted;
+              muteBtn.innerText = aud.muted ? "🔇" : "🔊";
+              muteBtn.title = aud.muted ? "Unmute Audio" : "Mute Audio";
+            }
+          };
+        }
+      }
+    }
+
+    // Track 4: Transition SFX Gutter Tag
+    let sfxTag = document.getElementById("cap-tl-tag-sfx");
+    if (window._SFX_ENABLED) {
+      if (!sfxTag) {
+        sfxTag = document.createElement("div");
+        sfxTag.id = "cap-tl-tag-sfx";
+        sfxTag.className = "tl__tag tl__tag--sfx";
+        sfxTag.title = "Transition SFX Markers Track";
+        sfxTag.innerHTML = `
+          <div class="cap-tag-main">
+            <span class="cap-tag-icon">🔔</span>
+            <span class="cap-tag-label">SFX</span>
+          </div>
+          <div class="cap-tag-actions">
+            <button type="button" class="cap-track-btn" title="SFX Active">🔊</button>
+            <button type="button" class="cap-track-btn" title="Lock SFX Track">🔒</button>
+          </div>
+        `;
+        gutter.appendChild(sfxTag);
+      }
+      sfxTag.style.display = "flex";
+    } else {
+      if (sfxTag) sfxTag.style.display = "none";
+    }
+  }
+
+  // 7. CapCut Subtitle / Captions Timeline Lane
+  function injectCapCutCaptionsTimelineLane() {
+    const tlTrack = document.querySelector(".tl__track");
+    if (!tlTrack) return;
+
+    const videoLane = tlTrack.querySelector(".tl__lane--video");
+    if (!videoLane) return;
+
+    let capLane = document.getElementById("cap-tl-captions-lane");
+    if (!capLane) {
+      capLane = document.createElement("div");
+      capLane.id = "cap-tl-captions-lane";
+      capLane.className = "cap-tl-captions-lane";
+      capLane.title = "Synchronized Subtitle Track";
+      tlTrack.insertBefore(capLane, videoLane);
+    }
+
+    const cues = window._CAPTION_CUES || (currentTranscript && currentTranscript.segments);
+    const totalDuration = (currentTranscript && currentTranscript.duration) || 
+      (window._TIMELINE_CLIPS && window._TIMELINE_CLIPS.length && 
+       window._TIMELINE_CLIPS[window._TIMELINE_CLIPS.length - 1].start + 
+       window._TIMELINE_CLIPS[window._TIMELINE_CLIPS.length - 1].duration) || 30.0;
+
+    if (cues && cues.length > 0) {
+      if (capLane.dataset.cueCount !== String(cues.length)) {
+        capLane.dataset.cueCount = String(cues.length);
+        capLane.innerHTML = "";
+        cues.forEach((cue) => {
+          const pill = document.createElement("div");
+          pill.className = "cap-tl-cue-pill";
+          const leftPct = Math.max(0, (cue.start / totalDuration) * 100);
+          const widthPct = Math.max(1.5, ((cue.end - cue.start) / totalDuration) * 100);
+          pill.style.left = `${leftPct}%`;
+          pill.style.width = `${widthPct}%`;
+          pill.title = `${cue.start.toFixed(1)}s – ${cue.end.toFixed(1)}s: ${cue.text}`;
+          pill.innerHTML = `<span>💬</span><span>${cue.text}</span>`;
+          pill.onclick = (e) => {
+            e.stopPropagation();
+            if (audioElement) {
+              audioElement.currentTime = cue.start;
+              audioElement.play();
+            }
+          };
+          capLane.appendChild(pill);
+        });
+      }
+    } else {
+      if (!capLane.querySelector(".cap-tl-empty-track")) {
+        capLane.dataset.cueCount = "0";
+        capLane.innerHTML = `
+          <div class="cap-tl-empty-track" title="Click to auto-generate subtitles with Whisper AI">
+            <span class="cap-tl-empty-icon">💬</span>
+            <span class="cap-tl-empty-text">Captions Track &middot;</span>
+            <button type="button" class="cap-tl-empty-btn" id="btn-tl-quick-captions">+ Auto Captions</button>
+          </div>
+        `;
+        const quickBtn = capLane.querySelector("#btn-tl-quick-captions");
+        if (quickBtn) {
+          quickBtn.onclick = (e) => {
+            e.stopPropagation();
+            handleInEditorGenerateCaptions(quickBtn);
+          };
+        }
+      }
+    }
+  }
+
+  // 8. CapCut SFX Timeline Lane
+  function injectCapCutSFXTimelineLane() {
+    const tlTrack = document.querySelector(".tl__track");
+    if (!tlTrack) return;
+
+    const audioLane = tlTrack.querySelector(".tl__lane--audio");
+    if (!audioLane) return;
+
+    let sfxLane = document.getElementById("cap-tl-sfx-lane");
+    if (!window._SFX_ENABLED) {
+      if (sfxLane) sfxLane.style.display = "none";
+      return;
+    }
+
+    if (!sfxLane) {
+      sfxLane = document.createElement("div");
+      sfxLane.id = "cap-tl-sfx-lane";
+      sfxLane.className = "cap-tl-sfx-lane";
+      sfxLane.title = "Transition SFX Markers Track";
+      tlTrack.appendChild(sfxLane);
+    }
+    sfxLane.style.display = "block";
+
+    const clips = window._TIMELINE_CLIPS || [];
+    if (clips.length > 1 && sfxLane.childElementCount !== (clips.length - 1)) {
+      sfxLane.innerHTML = "";
+      const totalDuration = clips[clips.length - 1].start + clips[clips.length - 1].duration || 30.0;
+      for (let i = 1; i < clips.length; i++) {
+        const cutSec = clips[i].start;
+        const pill = document.createElement("div");
+        pill.className = "cap-tl-sfx-pill";
+        const leftPct = (cutSec / totalDuration) * 100;
+        pill.style.left = `${leftPct}%`;
+        const sfxName = (window._SELECTED_SFX && window._SELECTED_SFX !== "auto") ? window._SELECTED_SFX : "whoosh";
+        pill.title = `Cut at ${cutSec.toFixed(1)}s &middot; SFX: ${sfxName}`;
+        pill.innerHTML = `<span>🔔</span><span>${sfxName}</span>`;
+        pill.onclick = (e) => {
+          e.stopPropagation();
+          playSFX(sfxName, window._SFX_VOLUME);
+        };
+        sfxLane.appendChild(pill);
+      }
+    }
+  }
+
+  // 9. Enhance Step 1 Automatic Onboarding UI
+  function enhanceOnboardingScreen() {
+    const onboard = document.querySelector(".onboard");
+    if (!onboard) return;
+
+    const h = onboard.querySelector(".onboard__h");
+    if (h && !h.dataset.capcutEnhanced) {
+      h.dataset.capcutEnhanced = "true";
+      h.innerText = "Sync Voiceover to Storyboard Visuals, Automatically.";
+    }
+
+    const dzList = onboard.querySelectorAll(".dz");
+    if (dzList.length >= 2) {
+      const dzAudio = dzList[0];
+      const bodyAudio = dzAudio.querySelector(".dz__body");
+      if (bodyAudio && !bodyAudio.querySelector(".dz-browse-btn")) {
+        const btnAudio = document.createElement("span");
+        btnAudio.className = "dz-browse-btn";
+        btnAudio.innerText = "📁 Choose Audio File (MP3 / WAV)";
+        bodyAudio.appendChild(btnAudio);
+      }
+
+      const dzMedia = dzList[1];
+      const bodyMedia = dzMedia.querySelector(".dz__body");
+      if (bodyMedia && !bodyMedia.querySelector(".dz-browse-btn")) {
+        const btnMedia = document.createElement("span");
+        btnMedia.className = "dz-browse-btn";
+        btnMedia.innerText = "📁 Choose Images & Video Clips";
+        bodyMedia.appendChild(btnMedia);
+      }
+    }
+
+    const buildBtn = onboard.querySelector(".render.build");
+    if (buildBtn && !buildBtn.innerText.includes("CapCut")) {
+      buildBtn.innerText = "⚡ Build Automatic Timeline & Open CapCut Studio →";
+      buildBtn.title = "Build synchronized timeline and open CapCut editor";
+    }
+  }
+
 
   async function handleInEditorGenerateCaptions(btn) {
     if (!btn) return;

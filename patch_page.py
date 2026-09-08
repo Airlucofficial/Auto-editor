@@ -18,6 +18,7 @@ if (
     "window._CANVAS_REDRAW" in text
     and "};let eL=(0,l.useCallback)" in text
     and "window._SET_REACT_CAPTION_STYLE" in text
+    and "window._SET_ASPECT" in text
 ):
     print("Page chunk is already patched and scope integrity is verified.")
     exit(0)
@@ -76,9 +77,28 @@ text = text.replace(s_child_ref, r_child_ref, 1)
 
 # 4. Expose timeline clips and transitions
 s_clips = "clips:e4,imageEls:e1,"
-assert s_clips in text, "s_clips target not found"
-r_clips = "clips:(typeof window!==\"undefined\"?(window._TIMELINE_CLIPS=e4,window._TIMELINE_TRANSITIONS=eR,e4):e4),imageEls:e1,"
-text = text.replace(s_clips, r_clips, 1)
+if s_clips in text:
+    r_clips = "clips:(typeof window!==\"undefined\"?(window._TIMELINE_CLIPS=e4,window._TIMELINE_TRANSITIONS=eR,e4):e4),imageEls:e1,"
+    text = text.replace(s_clips, r_clips, 1)
+
+# 4b. Expose aspect ratio state and setter to window
+t_aspect = "aspect:v,setAspect:b,fps:y,setFps:_,renderQuality:N,setRenderQuality:k"
+if t_aspect in text:
+    r_aspect = "aspect:(typeof window!==\"undefined\"?(window._ASPECT=v,window._SET_ASPECT=b,window._TIMELINE_DURATION=p,v):v),setAspect:b,fps:y,setFps:_,renderQuality:N,setRenderQuality:k"
+    text = text.replace(t_aspect, r_aspect, 1)
+
+# 4c. Expose voiceover audio element reference to window
+t_audio = '(0,n.jsx)("audio",{ref:eE,src:s,hidden:!0})'
+if t_audio in text:
+    r_audio = '(0,n.jsx)("audio",{ref:(el)=>{eE.current=el;if(typeof window!=="undefined"){window._VOICEOVER_AUDIO_EL=el;}},src:s,hidden:!0})'
+    text = text.replace(t_audio, r_audio, 1)
+
+# 4d. Video element unmuted & DOM attachment for reliable audio output
+t_video = 'n.src=a.url,n.muted=!0,n.playsInline=!0,n.preload="auto"'
+if t_video in text:
+    r_video = 'n.src=a.url,n.muted=!1,n.playsInline=!0,n.preload="auto";n.style.cssText="position:fixed;width:1px;height:1px;opacity:0.001;pointer-events:none;bottom:0;left:0;z-index:-999";if(typeof document!=="undefined"&&!document.getElementById("v_"+t)){n.id="v_"+t;document.body.appendChild(n)};'
+    text = text.replace(t_video, r_video, 1)
+
 
 # 5. Render spec caller parameters
 s_render_call = "captions:r,captionStyle:Q,captionSize:et,captionLineHeight:en,captionFontScale:es,onProgress:ep"
