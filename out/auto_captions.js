@@ -3393,6 +3393,19 @@
     if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
   }
 
+  function initLayoutCustomizationSystem() {
+    window._LAYOUT_CONFIG = layoutConfig;
+    window._APPLY_WORKSPACE_PRESET = applyWorkspacePreset;
+    window._TOGGLE_EXPAND_PREVIEW = toggleExpandPreview;
+    window._INJECT_LAYOUT_SPLITTERS = injectLayoutSplitters;
+    window._INJECT_EXPAND_PREVIEW = injectExpandPreviewButton;
+    window._INJECT_WORKSPACE_PRESETS = injectWorkspacePresets;
+    window._INJECT_LAYOUT_MENU = injectLayoutMenu;
+    window._INIT_PLAYHEAD = initTimelinePlayheadController;
+    window._WATCH_EDITOR_UI = watchEditorUI;
+    applyLayoutStyles();
+  }
+
   // -------------------------------------------------------------------------
   // 4. Voice File & Master Voiceover Volume Control (Req 4)
   // -------------------------------------------------------------------------
@@ -3718,10 +3731,746 @@
     });
   }
 
+/* === ADVANCED RESPONSIVE LAYOUT & PLAYHEAD CONTROLLER === */
   // -------------------------------------------------------------------------
+  // 1. Interactive Professional Timeline Playhead Scrubber
+  // -------------------------------------------------------------------------
+  let isPlayheadDragging = false;
+
+  function initTimelinePlayheadController() {
+    const track = document.querySelector(".tl__track");
+    const playhead = document.querySelector(".tl__playhead");
+    if (!track || !playhead) return;
+
+    const grip = playhead.querySelector(".tl__playhead-grip");
+    if (!grip) return;
+
+    if (grip._hasPlayheadController) return;
+    grip._hasPlayheadController = true;
+
+    playhead.style.pointerEvents = "auto";
+    grip.style.pointerEvents = "auto";
+
+    const getTotalDuration = () => {
+      return window._TIMELINE_TOTAL_DURATION || 
+             (window._VOICEOVER_AUDIO_EL && window._VOICEOVER_AUDIO_EL.duration) || 
+             (window._TIMELINE_CLIPS && window._TIMELINE_CLIPS.length && 
+              window._TIMELINE_CLIPS[window._TIMELINE_CLIPS.length - 1].start + 
+              window._TIMELINE_CLIPS[window._TIMELINE_CLIPS.length - 1].duration) || 30.0;
+    };
+
+    const getTrackClips = () => {
+      return window._TIMELINE_CLIPS || [];
+    };
+
+    const isSnappingEnabled = () => {
+      const snapBtn = document.getElementById("cap-tl-btn-snap");
+      return !snapBtn || snapBtn.classList.contains("is-active");
+    };
+
+    const computeTimeFromClientX = (clientX) => {
+      const rect = track.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return 0;
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      let targetSec = ratio * getTotalDuration();
+
+      if (isSnappingEnabled()) {
+        const clips = getTrackClips();
+        const snapThresholdSec = 0.18;
+        for (const clip of clips) {
+          if (clip.start !== undefined && Math.abs(clip.start - targetSec) <= snapThresholdSec) {
+            targetSec = clip.start;
+            break;
+          }
+          if (clip.start !== undefined && clip.duration !== undefined) {
+            const cutEnd = clip.start + clip.duration;
+            if (Math.abs(cutEnd - targetSec) <= snapThresholdSec) {
+              targetSec = cutEnd;
+              break;
+            }
+          }
+        }
+      }
+      return Math.max(0, Math.min(getTotalDuration(), targetSec));
+    };
+
+    const updatePlayheadVisuals = (sec) => {
+      const total = getTotalDuration();
+      if (total <= 0) return;
+      const pct = Math.max(0, Math.min(100, (sec / total) * 100));
+      playhead.style.left = pct + "%";
+
+      const tcDisplay = document.getElementById("cap-tl-timecode-display");
+      const min = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      const frac = Math.floor((sec % 1) * 30);
+      const pad = (n) => String(n).padStart(2, "0");
+      if (tcDisplay) {
+        tcDisplay.innerText = pad(Math.floor(min / 60)) + ":" + pad(min % 60) + ":" + pad(s) + ":" + pad(frac);
+      }
+
+      const timeNowEl = document.querySelector(".time__now");
+      if (timeNowEl) {
+        timeNowEl.innerText = pad(min) + ":" + pad(s) + "." + Math.floor((sec % 1) * 10);
+      }
+    };
+
+    const performSeek = (sec) => {
+      updatePlayheadVisuals(sec);
+
+      if (window._SEEK_TO) {
+        window._SEEK_TO(sec);
+      } else if (window._VOICEOVER_AUDIO_EL) {
+        window._VOICEOVER_AUDIO_EL.currentTime = sec;
+      }
+
+      if (window._TRIGGER_CANVAS_DRAW) {
+        window._TRIGGER_CANVAS_DRAW();
+      }
+    };
+
+    const onPointerDown = (e) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      isPlayheadDragging = true;
+      document.body.classList.add("is-playhead-dragging");
+      playhead.classList.add("is-dragging");
+      grip.classList.add("is-dragging");
+
+      try {
+        grip.setPointerCapture(e.pointerId);
+      } catch (err) {}
+
+      const sec = computeTimeFromClientX(e.clientX);
+      performSeek(sec);
+
+      const onPointerMove = (moveEvt) => {
+        if (!isPlayheadDragging) return;
+        moveEvt.preventDefault();
+        const moveSec = computeTimeFromClientX(moveEvt.clientX);
+        performSeek(moveSec);
+      };
+
+      const onPointerUp = (upEvt) => {
+        if (!isPlayheadDragging) return;
+        isPlayheadDragging = false;
+        document.body.classList.remove("is-playhead-dragging");
+        playhead.classList.remove("is-dragging");
+        grip.classList.remove("is-dragging");
+
+        try {
+          grip.releasePointerCapture(upEvt.pointerId);
+        } catch (err) {}
+
+        window.removeEventListener("pointermove", onPointerMove, true);
+        window.removeEventListener("pointerup", onPointerUp, true);
+        window.removeEventListener("pointercancel", onPointerUp, true);
+
+        const finalSec = computeTimeFromClientX(upEvt.clientX);
+        performSeek(finalSec);
+      };
+
+      window.addEventListener("pointermove", onPointerMove, true);
+      window.addEventListener("pointerup", onPointerUp, true);
+      window.addEventListener("pointercancel", onPointerUp, true);
+    };
+
+    grip.addEventListener("pointerdown", onPointerDown, { passive: false });
+    playhead.addEventListener("pointerdown", onPointerDown, { passive: false });
+
+    // Scrubbing on ruler
+    const ruler = document.querySelector(".tl__ruler");
+    if (ruler && !ruler._hasScrubBridge) {
+      ruler._hasScrubBridge = true;
+      ruler.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".tl__playhead") || e.target.closest(".tl__playhead-grip")) return;
+        const sec = computeTimeFromClientX(e.clientX);
+        performSeek(sec);
+      }, true);
+    }
+
+    // Scrubbing on captions lane
+    const capLane = document.getElementById("cap-tl-captions-lane");
+    if (capLane && !capLane._hasScrubBridge) {
+      capLane._hasScrubBridge = true;
+      capLane.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".cap-tl-cue-pill") || e.target.closest("#btn-tl-quick-captions") || e.target.closest(".tl__playhead")) return;
+        const sec = computeTimeFromClientX(e.clientX);
+        performSeek(sec);
+      }, true);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. Fully Customizable Layout Configuration System
+  // -------------------------------------------------------------------------
+  const LAYOUT_STORAGE_KEY = "autoeditor_layout_config_v2";
+
+  let layoutConfig = {
+    sideWidth: 330,
+    viewerHeightPct: 58,
+    isLocked: false,
+    isExpandedPreview: false,
+    sidebarPos: "right",
+    timelinePos: "bottom",
+    panels: {
+      preview: true,
+      timeline: true,
+      export: true,
+      transitions: true,
+      voice: true,
+      speed: true
+    },
+    activePreset: "default"
+  };
+
+  try {
+    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      layoutConfig = Object.assign({}, layoutConfig, parsed);
+    }
+  } catch (e) {}
+
+  function saveLayoutConfig() {
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutConfig));
+    } catch (e) {}
+  }
+
+  function applyLayoutStyles() {
+    const editor = document.querySelector(".editor");
+    if (!editor) return;
+
+    document.documentElement.style.setProperty("--editor-side-width", layoutConfig.sideWidth + "px");
+    document.documentElement.style.setProperty("--editor-viewer-height", layoutConfig.viewerHeightPct + "%");
+    document.documentElement.style.setProperty("--editor-tl-height", (100 - layoutConfig.viewerHeightPct) + "%");
+
+    if (layoutConfig.sidebarPos === "left") {
+      editor.classList.add("layout--sidebar-left");
+    } else {
+      editor.classList.remove("layout--sidebar-left");
+    }
+
+    if (layoutConfig.timelinePos === "top") {
+      editor.classList.add("layout--timeline-top");
+    } else {
+      editor.classList.remove("layout--timeline-top");
+    }
+
+    if (layoutConfig.isLocked) {
+      editor.classList.add("layout--locked");
+    } else {
+      editor.classList.remove("layout--locked");
+    }
+
+    if (layoutConfig.isExpandedPreview) {
+      editor.classList.add("editor--expand-preview");
+    } else {
+      editor.classList.remove("editor--expand-preview");
+    }
+
+    // Panel visibility
+    const viewer = document.querySelector(".viewer");
+    if (viewer) viewer.style.display = layoutConfig.panels.preview ? "flex" : "none";
+
+    const tl = document.querySelector(".tl");
+    if (tl) tl.style.display = layoutConfig.panels.timeline ? "flex" : "none";
+
+    const exportPanel = document.querySelector(".panel.export");
+    if (exportPanel) exportPanel.style.display = layoutConfig.panels.export ? "block" : "none";
+
+    const transPanel = document.querySelector(".panel.transitions");
+    if (transPanel) transPanel.style.display = layoutConfig.panels.transitions ? "block" : "none";
+
+    const voiceWrap = document.getElementById("cap-voice-vol-container");
+    if (voiceWrap) voiceWrap.style.display = layoutConfig.panels.voice ? "flex" : "none";
+
+    const speedPill = document.getElementById("cap-auto-speed-pill");
+    if (speedPill) speedPill.style.display = layoutConfig.panels.speed ? "flex" : "none";
+
+    // Update Lock button UI
+    const lockBtn = document.getElementById("btn-toggle-lock-layout");
+    if (lockBtn) {
+      lockBtn.classList.toggle("is-locked", layoutConfig.isLocked);
+      lockBtn.innerHTML = layoutConfig.isLocked ? "<span>🔒</span><span>Layout Locked</span>" : "<span>🔓</span><span>Layout Unlocked</span>";
+      lockBtn.title = layoutConfig.isLocked ? "Layout is locked to prevent accidental changes (Click to unlock)" : "Click to lock current layout";
+    }
+
+    // Update Expand Preview button
+    const expBtn = document.getElementById("btn-expand-preview-main") || document.getElementById("btn-toggle-fullview");
+    if (expBtn) {
+      expBtn.classList.toggle("is-active", layoutConfig.isExpandedPreview);
+      expBtn.innerHTML = layoutConfig.isExpandedPreview ? "<span>🗗</span><span>Restore View</span>" : "<span>⛶</span><span>Expand Preview</span>";
+    }
+
+    let banner = document.getElementById("cap-expanded-preview-banner");
+    if (!banner && layoutConfig.isExpandedPreview) {
+      banner = document.createElement("div");
+      banner.id = "cap-expanded-preview-banner";
+      banner.className = "cap-expanded-preview-banner";
+      banner.innerHTML = `
+        <span>⛶ Large Preview Active (Timeline Docked Below)</span>
+        <button type="button" class="cap-expanded-preview-exit-btn" id="btn-exit-expanded-preview">Restore (Esc)</button>
+      `;
+      document.body.appendChild(banner);
+      banner.querySelector("#btn-exit-expanded-preview").onclick = toggleExpandPreview;
+    }
+    if (banner) {
+      banner.classList.toggle("is-visible", !!layoutConfig.isExpandedPreview);
+    }
+    if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+  }
+
+  // -------------------------------------------------------------------------
+  // 3. Resizable Splitters (Horizontal & Vertical)
+  // -------------------------------------------------------------------------
+  function injectLayoutSplitters() {
+    const editor = document.querySelector(".editor");
+    if (!editor) return;
+
+    const main = editor.querySelector(".main");
+    const side = editor.querySelector(".side");
+    if (!main || !side) return;
+
+    // Horizontal Splitter between Main and Side
+    let splitH = document.getElementById("editor-splitter-h");
+    if (!splitH) {
+      splitH = document.createElement("div");
+      splitH.id = "editor-splitter-h";
+      splitH.className = "editor-splitter editor-splitter--h";
+      splitH.title = "Drag to resize sidebar width | Click arrow to collapse";
+
+      const colBtn = document.createElement("button");
+      colBtn.type = "button";
+      colBtn.className = "splitter-collapse-btn";
+      colBtn.id = "btn-splitter-collapse-side";
+      colBtn.innerHTML = "◀";
+      colBtn.title = "Collapse / Expand Sidebar";
+      colBtn.onclick = (e) => {
+        e.stopPropagation();
+        side.classList.toggle("is-collapsed");
+        colBtn.innerHTML = side.classList.contains("is-collapsed") ? "▶" : "◀";
+        if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+      };
+      splitH.appendChild(colBtn);
+
+      editor.insertBefore(splitH, side);
+
+      splitH.onpointerdown = (e) => {
+        if (layoutConfig.isLocked || e.target === colBtn) return;
+        e.preventDefault();
+        splitH.setPointerCapture(e.pointerId);
+        splitH.classList.add("is-active");
+
+        const editorRect = editor.getBoundingClientRect();
+
+        const onMove = (moveEvt) => {
+          let newWidth = 0;
+          if (layoutConfig.sidebarPos === "left") {
+            newWidth = moveEvt.clientX - editorRect.left;
+          } else {
+            newWidth = editorRect.right - moveEvt.clientX;
+          }
+          newWidth = Math.max(220, Math.min(650, newWidth));
+          layoutConfig.sideWidth = Math.round(newWidth);
+          document.documentElement.style.setProperty("--editor-side-width", layoutConfig.sideWidth + "px");
+          if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+        };
+
+        const onUp = (upEvt) => {
+          try { splitH.releasePointerCapture(upEvt.pointerId); } catch(err){}
+          splitH.classList.remove("is-active");
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("mouseup", onUp);
+          saveLayoutConfig();
+          if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+        };
+
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("mouseup", onUp);
+      };
+    }
+
+    // Vertical Splitter between Viewer and Timeline
+    const viewer = main.querySelector(".viewer");
+    const tl = main.querySelector(".tl");
+    if (!viewer || !tl) return;
+
+    let splitV = document.getElementById("editor-splitter-v");
+    if (!splitV) {
+      splitV = document.createElement("div");
+      splitV.id = "editor-splitter-v";
+      splitV.className = "editor-splitter editor-splitter--v";
+      splitV.title = "Drag to resize Video Preview and Timeline heights";
+
+      main.insertBefore(splitV, tl);
+
+      splitV.onpointerdown = (e) => {
+        if (layoutConfig.isLocked) return;
+        e.preventDefault();
+        splitV.setPointerCapture(e.pointerId);
+        splitV.classList.add("is-active");
+
+        const mainRect = main.getBoundingClientRect();
+
+        const onMove = (moveEvt) => {
+          let offsetY = moveEvt.clientY - mainRect.top;
+          if (layoutConfig.timelinePos === "top") {
+            offsetY = mainRect.bottom - moveEvt.clientY;
+          }
+          let pct = (offsetY / mainRect.height) * 100;
+          pct = Math.max(30, Math.min(82, pct));
+          layoutConfig.viewerHeightPct = Math.round(pct);
+          document.documentElement.style.setProperty("--editor-viewer-height", layoutConfig.viewerHeightPct + "%");
+          document.documentElement.style.setProperty("--editor-tl-height", (100 - layoutConfig.viewerHeightPct) + "%");
+          if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+        };
+
+        const onUp = (upEvt) => {
+          try { splitV.releasePointerCapture(upEvt.pointerId); } catch(err){}
+          splitV.classList.remove("is-active");
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("mouseup", onUp);
+          saveLayoutConfig();
+          if (window._CANVAS_REDRAW) window._CANVAS_REDRAW();
+        };
+
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("mouseup", onUp);
+      };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 4. CapCut-Style Expand Video Preview Mode
+  // -------------------------------------------------------------------------
+  function toggleExpandPreview() {
+    layoutConfig.isExpandedPreview = !layoutConfig.isExpandedPreview;
+    applyLayoutStyles();
+    saveLayoutConfig();
+
+    if (window._CANVAS_REDRAW) {
+      setTimeout(window._CANVAS_REDRAW, 50);
+    }
+  }
+
+  function injectExpandPreviewButton() {
+    const transport = document.querySelector(".transport");
+    if (!transport) return;
+
+    let btn = document.getElementById("btn-expand-preview-main");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "btn-expand-preview-main";
+      btn.className = "btn-expand-preview";
+      btn.innerHTML = layoutConfig.isExpandedPreview ? "<span>🗗</span><span>Restore View</span>" : "<span>⛶</span><span>Expand Preview</span>";
+      btn.title = "Expand Video Preview to fill screen (Keeps Timeline docked for editing)";
+      btn.onclick = toggleExpandPreview;
+
+      // Replace or augment old fullview button
+      const oldBtn = document.getElementById("btn-toggle-fullview");
+      if (oldBtn) {
+        oldBtn.replaceWith(btn);
+      } else {
+        const historyDiv = transport.querySelector(".history");
+        if (historyDiv) {
+          transport.insertBefore(btn, historyDiv);
+        } else {
+          transport.appendChild(btn);
+        }
+      }
+    }
+
+    // Keyboard shortcut Esc or Ctrl+Enter to toggle
+    if (!window._hasExpandShortcut) {
+      window._hasExpandShortcut = true;
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && layoutConfig.isExpandedPreview) {
+          toggleExpandPreview();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          toggleExpandPreview();
+        }
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 5. Workspace Presets Bar & Lock Layout Controls in Header
+  // -------------------------------------------------------------------------
+  function applyWorkspacePreset(presetId) {
+    layoutConfig.activePreset = presetId;
+    layoutConfig.isExpandedPreview = false;
+
+    const side = document.querySelector(".side");
+    if (side) side.classList.remove("is-collapsed");
+
+    if (presetId === "preview_focus") {
+      layoutConfig.viewerHeightPct = 74;
+      layoutConfig.sideWidth = 240;
+      layoutConfig.panels.export = false;
+      layoutConfig.panels.transitions = false;
+    } else if (presetId === "timeline_focus") {
+      layoutConfig.viewerHeightPct = 44;
+      layoutConfig.sideWidth = 320;
+      layoutConfig.panels.export = true;
+      layoutConfig.panels.transitions = true;
+    } else if (presetId === "captions_focus") {
+      layoutConfig.viewerHeightPct = 55;
+      layoutConfig.sideWidth = 380;
+      layoutConfig.panels.export = true;
+      layoutConfig.panels.transitions = true;
+    } else if (presetId === "export_focus") {
+      layoutConfig.viewerHeightPct = 52;
+      layoutConfig.sideWidth = 420;
+      layoutConfig.panels.export = true;
+      layoutConfig.panels.transitions = true;
+    } else { // default
+      layoutConfig.viewerHeightPct = 58;
+      layoutConfig.sideWidth = 330;
+      layoutConfig.panels.preview = true;
+      layoutConfig.panels.timeline = true;
+      layoutConfig.panels.export = true;
+      layoutConfig.panels.transitions = true;
+    }
+
+    applyLayoutStyles();
+    saveLayoutConfig();
+    updateWorkspacePresetButtons();
+  }
+
+  function updateWorkspacePresetButtons() {
+    document.querySelectorAll(".cap-ws-btn").forEach(btn => {
+      const id = btn.getAttribute("data-preset");
+      btn.classList.toggle("is-active", id === layoutConfig.activePreset);
+    });
+  }
+
+  function injectWorkspacePresets() {
+    const bar = document.querySelector(".bar");
+    if (!bar) return;
+
+    let wsBar = document.getElementById("cap-workspace-bar");
+    if (!wsBar) {
+      wsBar = document.createElement("div");
+      wsBar.id = "cap-workspace-bar";
+      wsBar.className = "cap-workspace-bar";
+      wsBar.innerHTML = `
+        <button type="button" class="cap-ws-btn" data-preset="preview_focus" title="Maximized Video Preview with compact editing timeline">🎬 Large Preview</button>
+        <button type="button" class="cap-ws-btn" data-preset="timeline_focus" title="Expanded multi-track timeline focus">⚡ Timeline</button>
+        <button type="button" class="cap-ws-btn" data-preset="captions_focus" title="Caption studio with preset selector focus">🎨 Captions</button>
+        <button type="button" class="cap-ws-btn" data-preset="export_focus" title="Export settings & transition mixing focus">🚀 Export</button>
+        <button type="button" class="cap-ws-btn" data-preset="default" title="Reset to default balanced workspace">⚙️ Default</button>
+      `;
+
+      wsBar.querySelectorAll(".cap-ws-btn").forEach(b => {
+        b.onclick = () => applyWorkspacePreset(b.getAttribute("data-preset"));
+      });
+
+      const barActions = bar.querySelector(".bar__actions");
+      if (barActions) {
+        bar.insertBefore(wsBar, barActions);
+      } else {
+        bar.appendChild(wsBar);
+      }
+    }
+
+    updateWorkspacePresetButtons();
+  }
+
+  function injectLayoutMenu() {
+    const barActions = document.querySelector(".bar__actions");
+    if (!barActions || document.getElementById("btn-toggle-lock-layout")) return;
+
+    // 1. Lock Layout Button
+    const lockBtn = document.createElement("button");
+    lockBtn.type = "button";
+    lockBtn.id = "btn-toggle-lock-layout";
+    lockBtn.className = "btn-lock-layout";
+    lockBtn.innerHTML = layoutConfig.isLocked ? "<span>🔒</span><span>Layout Locked</span>" : "<span>🔓</span><span>Layout Unlocked</span>";
+    lockBtn.title = "Lock/Unlock editor panel sizes and positions";
+    lockBtn.onclick = () => {
+      layoutConfig.isLocked = !layoutConfig.isLocked;
+      applyLayoutStyles();
+      saveLayoutConfig();
+    };
+
+    // 2. Layout & Panels Dropdown Button
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.id = "btn-toggle-layout-menu";
+    menuBtn.className = "btn-layout-menu-toggle";
+    menuBtn.innerHTML = "<span>📐</span><span>Panels ▾</span>";
+    menuBtn.title = "Show/hide individual panels and customize workspace arrangement";
+
+    let dropdown = document.getElementById("cap-layout-dropdown");
+    if (!dropdown) {
+      dropdown = document.createElement("div");
+      dropdown.id = "cap-layout-dropdown";
+      dropdown.className = "cap-layout-dropdown";
+      dropdown.style.display = "none";
+      dropdown.innerHTML = `
+        <div class="cap-layout-dropdown-h">
+          <span>Visible Panels</span>
+          <span style="font-size:10px; color:#00f5d4;">CUSTOMIZE</span>
+        </div>
+        <label class="cap-panel-toggle-item">
+          <span>🎬 Video Preview Window</span>
+          <input type="checkbox" id="chk-panel-preview" ${layoutConfig.panels.preview ? "checked" : ""} />
+        </label>
+        <label class="cap-panel-toggle-item">
+          <span>⚡ Multi-Track Timeline</span>
+          <input type="checkbox" id="chk-panel-timeline" ${layoutConfig.panels.timeline ? "checked" : ""} />
+        </label>
+        <label class="cap-panel-toggle-item">
+          <span>🚀 Export & Format Panel</span>
+          <input type="checkbox" id="chk-panel-export" ${layoutConfig.panels.export ? "checked" : ""} />
+        </label>
+        <label class="cap-panel-toggle-item">
+          <span>✨ Transitions & Mix Panel</span>
+          <input type="checkbox" id="chk-panel-transitions" ${layoutConfig.panels.transitions ? "checked" : ""} />
+        </label>
+        <label class="cap-panel-toggle-item">
+          <span>🔊 Voice Volume Controls</span>
+          <input type="checkbox" id="chk-panel-voice" ${layoutConfig.panels.voice ? "checked" : ""} />
+        </label>
+        <label class="cap-panel-toggle-item">
+          <span>⚡ Auto-Speed Sync Badge</span>
+          <input type="checkbox" id="chk-panel-speed" ${layoutConfig.panels.speed ? "checked" : ""} />
+        </label>
+
+        <div class="cap-layout-dropdown-h" style="margin-top:8px;">
+          <span>Rearrange Layout</span>
+        </div>
+        <div class="cap-layout-opt-row">
+          <span>Sidebar Position:</span>
+          <select id="sel-sidebar-pos">
+            <option value="right" ${layoutConfig.sidebarPos === "right" ? "selected" : ""}>Right Side</option>
+            <option value="left" ${layoutConfig.sidebarPos === "left" ? "selected" : ""}>Left Side</option>
+          </select>
+        </div>
+        <div class="cap-layout-opt-row">
+          <span>Timeline Position:</span>
+          <select id="sel-timeline-pos">
+            <option value="bottom" ${layoutConfig.timelinePos === "bottom" ? "selected" : ""}>Bottom</option>
+            <option value="top" ${layoutConfig.timelinePos === "top" ? "selected" : ""}>Top</option>
+          </select>
+        </div>
+
+        <button type="button" class="cap-layout-reset-btn" id="btn-reset-layout-default">Reset to Default Layout</button>
+      `;
+
+      document.body.appendChild(dropdown);
+
+      // Checkbox listeners
+      const bindToggle = (chkId, key) => {
+        const chk = dropdown.querySelector(chkId);
+        if (chk) {
+          chk.onchange = (e) => {
+            layoutConfig.panels[key] = e.target.checked;
+            applyLayoutStyles();
+            saveLayoutConfig();
+          };
+        }
+      };
+      bindToggle("#chk-panel-preview", "preview");
+      bindToggle("#chk-panel-timeline", "timeline");
+      bindToggle("#chk-panel-export", "export");
+      bindToggle("#chk-panel-transitions", "transitions");
+      bindToggle("#chk-panel-voice", "voice");
+      bindToggle("#chk-panel-speed", "speed");
+
+      // Position Selectors
+      const selSide = dropdown.querySelector("#sel-sidebar-pos");
+      if (selSide) {
+        selSide.onchange = (e) => {
+          layoutConfig.sidebarPos = e.target.value;
+          applyLayoutStyles();
+          saveLayoutConfig();
+        };
+      }
+
+      const selTl = dropdown.querySelector("#sel-timeline-pos");
+      if (selTl) {
+        selTl.onchange = (e) => {
+          layoutConfig.timelinePos = e.target.value;
+          applyLayoutStyles();
+          saveLayoutConfig();
+        };
+      }
+
+      // Reset
+      dropdown.querySelector("#btn-reset-layout-default").onclick = () => {
+        applyWorkspacePreset("default");
+        dropdown.style.display = "none";
+      };
+    }
+
+    menuBtn.onclick = (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle("is-open");
+      if (dropdown.classList.contains("is-open")) {
+        const rect = menuBtn.getBoundingClientRect();
+        dropdown.style.top = (rect.bottom + 8) + "px";
+        dropdown.style.right = (window.innerWidth - rect.right) + "px";
+      }
+    };
+
+    document.addEventListener("click", (e) => {
+      if (!dropdown.contains(e.target) && e.target !== menuBtn) {
+        dropdown.classList.remove("is-open");
+      }
+    });
+
+    const expBtn = document.getElementById("btn-capcut-header-export");
+    if (expBtn) {
+      barActions.insertBefore(lockBtn, expBtn);
+      barActions.insertBefore(menuBtn, expBtn);
+    } else {
+      barActions.appendChild(lockBtn);
+      barActions.appendChild(menuBtn);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 6. Responsive Player Transport Bar Formatting
+  // -------------------------------------------------------------------------
+  function formatResponsiveTransportBar() {
+    const transport = document.querySelector(".transport");
+    if (!transport || transport._isFormatted) return;
+    transport._isFormatted = true;
+
+    // Wrap elements if needed to ensure no overlaps
+    transport.style.flexWrap = "wrap";
+    transport.style.alignItems = "center";
+  }
+
+
+
+    // -------------------------------------------------------------------------
   // Main UI Watcher & Periodic Injection Loop
   // -------------------------------------------------------------------------
   function watchEditorUI() {
+    initTimelinePlayheadController();
+    initLayoutCustomizationSystem();
+    injectLayoutSplitters();
+    injectExpandPreviewButton();
+    injectWorkspacePresets();
+    injectLayoutMenu();
+    formatResponsiveTransportBar();
+    applyLayoutStyles();
+
     removeUnwantedLinks();
     ensureModal();
     injectHeaderButton();
@@ -5324,6 +6073,119 @@
       return;
     }
   }, true);
+
+  
+    // -------------------------------------------------------------------------
+  // 7. Instant Demo Storyboard Timeline Builder (for Quickstart & E2E Testing)
+  // -------------------------------------------------------------------------
+  window.__BUILD_DEMO_TIMELINE = async function() {
+    console.log("Generating demo media and building timeline...");
+
+    // 1. Synthetic WAV Audio (15 seconds, 440Hz beep)
+    const sampleRate = 16000;
+    const duration = 15;
+    const numSamples = sampleRate * duration;
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+    };
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const s = Math.sin(2 * Math.PI * 440 * t) * 0.3 * (t % 2 < 1 ? 1 : 0.2);
+      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    const audioBlob = new Blob([buffer], { type: 'audio/wav' });
+    const audioFile = new File([audioBlob], 'voiceover_demo.wav', { type: 'audio/wav' });
+
+    // 2. Synthetic Storyboard Images
+    const createDemoImage = (filename, label, color) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 1280, 720);
+      grad.addColorStop(0, color);
+      grad.addColorStop(1, '#090a0f');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1280, 720);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 50px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, 640, 360);
+      ctx.font = '22px monospace';
+      ctx.fillStyle = '#00f5d4';
+      ctx.fillText(filename, 640, 420);
+
+      return new Promise(resolve => {
+        canvas.toBlob(blob => {
+          resolve(new File([blob], filename, { type: 'image/png' }));
+        }, 'image/png');
+      });
+    };
+
+    const img1 = await createDemoImage('0-00_intro_scene.png', 'Scene 1: Introduction (0:00)', '#1e3a8a');
+    const img2 = await createDemoImage('0-05_features_showcase.png', 'Scene 2: Core Features (0:05)', '#065f46');
+    const img3 = await createDemoImage('0-10_final_callout.png', 'Scene 3: Final Callout (0:10)', '#831843');
+
+    // 3. Populate File Inputs
+    const audioInput = document.querySelectorAll('input[type="file"][accept*="audio"]')[0];
+    if (audioInput) {
+      const dtAudio = new DataTransfer();
+      dtAudio.items.add(audioFile);
+      audioInput.files = dtAudio.files;
+      audioInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const mediaInput = document.querySelectorAll('input[type="file"][accept*="image"]')[0];
+    if (mediaInput) {
+      const dtMedia = new DataTransfer();
+      dtMedia.items.add(img1);
+      dtMedia.items.add(img2);
+      dtMedia.items.add(img3);
+      mediaInput.files = dtMedia.files;
+      mediaInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 4. Poll until build button is enabled, then click
+    let attempts = 0;
+    const clickInterval = setInterval(() => {
+      attempts++;
+      const buildBtn = document.querySelector('.render.build');
+      if (buildBtn && !buildBtn.disabled) {
+        clearInterval(clickInterval);
+        buildBtn.click();
+        console.log("Successfully clicked Build timeline!");
+      } else if (attempts > 40) {
+        clearInterval(clickInterval);
+      }
+    }, 150);
+  };
+
+  // Check URL param ?demo=1
+  if (typeof window !== "undefined" && window.location && window.location.search && window.location.search.includes("demo=1")) {
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        if (window.__BUILD_DEMO_TIMELINE) window.__BUILD_DEMO_TIMELINE();
+      }, 600);
+    });
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

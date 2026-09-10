@@ -2971,3 +2971,645 @@ button.cut.is-sel {
   }
 }
 
+
+
+/* === EXPAND VIDEO PREVIEW & FULLY CUSTOMIZABLE EDITOR LAYOUT ENGINE === */
+/* ==========================================================================
+   EXPAND VIDEO PREVIEW & FULLY CUSTOMIZABLE EDITOR LAYOUT ENGINE:
+   - Full Window Edge-to-Edge Responsive Expansion (Removes 1280px container clamp)
+   - Interactive Draggable Splitters (Horizontal between Main/Side, Vertical between Viewer/TL)
+   - CapCut-Style Expand Preview Window Mode (Maximized monitor + compact timeline)
+   - Workspace Presets: Preview Focus, Timeline Focus, Captions Studio, Export & Audio, Default Balanced
+   - Layout & Panels Visibility Menu (Show/Hide individual controls & panels)
+   - Rearrangeable Layout: Left/Right Sidebar, Top/Bottom Timeline
+   - Lock Layout Toggle: 1-click protection against accidental changes
+   - Interactive Playhead & Handle Perfection: Smooth 60fps scrubbing with audio/canvas sync
+   - Clean, Non-Overlapping Responsive Player & Transport Bar
+   ========================================================================== */
+
+/* 1. Global Full-Window Edge-to-Edge Responsiveness */
+html, body {
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #0f1013 !important;
+}
+
+.app {
+  max-width: 100vw !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 6px 12px 8px 12px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.content {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  overflow: hidden !important;
+}
+
+/* 2. Flexible Resizable Editor Workspace */
+:root {
+  --editor-side-width: 330px;
+  --editor-viewer-height: 58%;
+  --editor-tl-height: 42%;
+}
+
+.editor {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+/* Reversible Layout Directions */
+.editor.layout--sidebar-left {
+  flex-direction: row-reverse !important;
+}
+
+.editor.layout--timeline-top .main {
+  flex-direction: column-reverse !important;
+}
+
+/* Main Area (Video Preview + Timeline) */
+.main {
+  flex: 1 1 0 !important;
+  min-width: 320px !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+/* Side Area (Export + Transitions + Style Drawer) */
+.side {
+  flex: 0 0 var(--editor-side-width, 330px) !important;
+  width: var(--editor-side-width, 330px) !important;
+  min-width: 240px !important;
+  max-width: 650px !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  overflow-y: auto !important;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
+  box-sizing: border-box !important;
+  transition: width 0.15s ease, opacity 0.15s ease !important;
+}
+
+.side.is-collapsed {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* 3. Horizontal Splitter (Divider between Main and Side) */
+.editor-splitter {
+  position: relative !important;
+  z-index: 40 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  user-select: none !important;
+  touch-action: none !important;
+}
+
+.editor-splitter--h {
+  width: 10px !important;
+  height: 100% !important;
+  cursor: col-resize !important;
+  margin: 0 1px !important;
+  flex: 0 0 10px !important;
+  background: transparent !important;
+  transition: background 0.15s ease !important;
+}
+
+.editor-splitter--h::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 4px !important;
+  width: 2px !important;
+  background: #282932 !important;
+  border-radius: 1px !important;
+  transition: all 0.2s ease !important;
+}
+
+.editor-splitter--h:hover::before,
+.editor-splitter--h.is-active::before {
+  background: #00f5d4 !important;
+  box-shadow: 0 0 8px rgba(0, 245, 212, 0.8) !important;
+  width: 3px !important;
+}
+
+/* Collapse / Expand mini-toggle on horizontal splitter */
+.splitter-collapse-btn {
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 16px !important;
+  height: 38px !important;
+  background: #1e2026 !important;
+  border: 1px solid #3b3e4f !important;
+  border-radius: 4px !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  z-index: 45 !important;
+  transition: all 0.15s ease !important;
+  padding: 0 !important;
+}
+
+.splitter-collapse-btn:hover {
+  background: #00f5d4 !important;
+  color: #000000 !important;
+  border-color: #00f5d4 !important;
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.6) !important;
+}
+
+/* 4. Vertical Splitter (Divider between Viewer and Timeline) */
+.editor-splitter--v {
+  height: 10px !important;
+  width: 100% !important;
+  cursor: row-resize !important;
+  margin: 1px 0 !important;
+  flex: 0 0 10px !important;
+  background: transparent !important;
+  transition: background 0.15s ease !important;
+}
+
+.editor-splitter--v::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 4px !important;
+  height: 2px !important;
+  background: #282932 !important;
+  border-radius: 1px !important;
+  transition: all 0.2s ease !important;
+}
+
+.editor-splitter--v:hover::before,
+.editor-splitter--v.is-active::before {
+  background: #00f5d4 !important;
+  box-shadow: 0 0 8px rgba(0, 245, 212, 0.8) !important;
+  height: 3px !important;
+}
+
+/* 5. Resizable Video Preview Window (.viewer) */
+.viewer {
+  flex: 1 1 var(--editor-viewer-height, 58%) !important;
+  height: var(--editor-viewer-height, 58%) !important;
+  min-height: 200px !important;
+  background: #16171c !important;
+  border: 1px solid #282932 !important;
+  border-radius: 12px !important;
+  padding: 8px 12px 6px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  position: relative !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.viewer__frame {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: #000000 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+.viewer__canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+/* 6. Resizable Multi-Track Timeline (.tl) */
+.tl {
+  flex: 0 0 var(--editor-tl-height, 42%) !important;
+  height: var(--editor-tl-height, 42%) !important;
+  min-height: 130px !important;
+  max-height: 75% !important;
+  background: #16171c !important;
+  border: 1px solid #282932 !important;
+  border-radius: 12px !important;
+  padding: 6px 12px 8px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 7. CapCut-Style EXPAND PREVIEW MODE (Maximized View) */
+.editor.editor--expand-preview .side {
+  display: none !important;
+  width: 0 !important;
+}
+.editor.editor--expand-preview .editor-splitter--h {
+  display: none !important;
+}
+.editor.editor--expand-preview .viewer {
+  flex: 1 1 calc(100% - 145px) !important;
+  height: calc(100% - 145px) !important;
+}
+.editor.editor--expand-preview .tl {
+  flex: 0 0 135px !important;
+  height: 135px !important;
+  min-height: 135px !important;
+}
+.editor.editor--expand-preview .viewer__frame {
+  height: 100% !important;
+}
+
+/* Expanded Preview Floating Badge */
+.cap-expanded-preview-banner {
+  position: absolute !important;
+  top: 58px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(15, 17, 23, 0.95) !important;
+  border: 1px solid #00f5d4 !important;
+  color: #00f5d4 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 14px !important;
+  border-radius: 9999px !important;
+  z-index: 9999 !important;
+  display: none !important;
+  align-items: center !important;
+  gap: 8px !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 4px 16px rgba(0, 245, 212, 0.25) !important;
+}
+
+.cap-expanded-preview-banner.is-visible {
+  display: flex !important;
+}
+
+.cap-expanded-preview-exit-btn {
+  background: #00f5d4 !important;
+  color: #000000 !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  padding: 2px 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  margin-left: 4px !important;
+  transition: all 0.12s ease !important;
+}
+.cap-expanded-preview-exit-btn:hover {
+  background: #ffffff !important;
+  box-shadow: 0 0 8px #00f5d4 !important;
+}
+
+/* 8. Locked Layout Mode */
+.editor.layout--locked .editor-splitter {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+.editor.layout--locked .editor-splitter::before {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+.editor.layout--locked .splitter-collapse-btn {
+  opacity: 0.35 !important;
+  pointer-events: none !important;
+}
+
+/* 9. Timeline Playhead & Handle Perfection */
+.tl__track {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.tl__playhead {
+  position: absolute !important;
+  top: -24px !important;
+  bottom: 0 !important;
+  width: 2px !important;
+  background: #00f5d4 !important;
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.9), 0 0 2px #ffffff !important;
+  z-index: 80 !important;
+  pointer-events: auto !important;
+  cursor: ew-resize !important;
+  transition: none !important;
+}
+
+.tl__playhead-grip {
+  position: absolute !important;
+  top: -8px !important;
+  left: 50% !important;
+  transform: translateX(-50%) rotate(45deg) !important;
+  width: 15px !important;
+  height: 15px !important;
+  background: #00f5d4 !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 3px !important;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.95), 0 2px 6px rgba(0, 0, 0, 0.7) !important;
+  pointer-events: auto !important;
+  cursor: grab !important;
+  z-index: 85 !important;
+  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+/* Extended hit area for effortless clicking and dragging */
+.tl__playhead-grip::before {
+  content: "" !important;
+  position: absolute !important;
+  top: -12px !important;
+  left: -12px !important;
+  right: -12px !important;
+  bottom: -12px !important;
+  background: transparent !important;
+  cursor: grab !important;
+}
+
+.tl__playhead-grip:hover {
+  transform: translateX(-50%) rotate(45deg) scale(1.2) !important;
+  box-shadow: 0 0 16px #00f5d4, 0 0 6px #ffffff !important;
+}
+
+.tl__playhead.is-dragging .tl__playhead-grip,
+.tl__playhead-grip.is-dragging {
+  cursor: grabbing !important;
+  transform: translateX(-50%) rotate(45deg) scale(1.3) !important;
+  background: #ffffff !important;
+  border-color: #00f5d4 !important;
+  box-shadow: 0 0 20px #00f5d4 !important;
+}
+
+body.is-playhead-dragging {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+body.is-playhead-dragging * {
+  user-select: none !important;
+  cursor: ew-resize !important;
+}
+
+/* 10. Clean, Non-Overlapping Responsive Transport Bar */
+.transport {
+  flex: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 8px 12px !important;
+  padding: 8px 4px 4px 4px !important;
+  border-top: 1px solid #282932 !important;
+  box-sizing: border-box !important;
+}
+
+.transport-section-left,
+.transport-section-center,
+.transport-section-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+}
+
+.btn-expand-preview {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: linear-gradient(135deg, rgba(0, 245, 212, 0.16) 0%, rgba(0, 200, 180, 0.08) 100%) !important;
+  border: 1px solid rgba(0, 245, 212, 0.4) !important;
+  color: #00f5d4 !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+.btn-expand-preview:hover {
+  background: rgba(0, 245, 212, 0.28) !important;
+  border-color: #00f5d4 !important;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.4) !important;
+}
+
+.btn-expand-preview.is-active {
+  background: #00f5d4 !important;
+  color: #000000 !important;
+  border-color: #00f5d4 !important;
+  box-shadow: 0 0 14px rgba(0, 245, 212, 0.6) !important;
+}
+
+/* 11. Top Navigation Workspace Presets Bar & Layout Menu */
+.cap-workspace-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  background: #121318 !important;
+  border: 1px solid #282932 !important;
+  border-radius: 8px !important;
+  padding: 2px 4px !important;
+}
+
+.cap-ws-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 4px 9px !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  border: none !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+  white-space: nowrap !important;
+}
+
+.cap-ws-btn:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.cap-ws-btn.is-active {
+  color: #000000 !important;
+  background: #00f5d4 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(0, 245, 212, 0.5) !important;
+}
+
+/* Lock Layout Button */
+.btn-lock-layout {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 5px 10px !important;
+  border-radius: 8px !important;
+  background: #1e2026 !important;
+  border: 1px solid #3b3e4f !important;
+  color: #cbd5e1 !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-lock-layout:hover {
+  border-color: #00f5d4 !important;
+  color: #00f5d4 !important;
+}
+
+.btn-lock-layout.is-locked {
+  background: rgba(245, 166, 35, 0.15) !important;
+  border-color: rgba(245, 166, 35, 0.5) !important;
+  color: #f5a623 !important;
+}
+
+/* Panels Menu Button & Dropdown */
+.btn-layout-menu-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 5px 10px !important;
+  border-radius: 8px !important;
+  background: #1e2026 !important;
+  border: 1px solid #3b3e4f !important;
+  color: #cbd5e1 !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-layout-menu-toggle:hover {
+  border-color: #00f5d4 !important;
+  color: #00f5d4 !important;
+}
+
+.cap-layout-dropdown {
+  position: absolute !important;
+  top: 56px !important;
+  right: 170px !important;
+  width: 290px !important;
+  background: #16171c !important;
+  border: 1px solid #282932 !important;
+  border-radius: 12px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6) !important;
+  z-index: 9999 !important;
+  display: none !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.cap-layout-dropdown.is-open {
+  display: flex !important;
+}
+
+.cap-layout-dropdown-h {
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 2px !important;
+}
+
+.cap-panel-toggle-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 12.5px !important;
+  color: #e2e8f0 !important;
+  cursor: pointer !important;
+  padding: 4px 0 !important;
+}
+
+.cap-panel-toggle-item input[type="checkbox"] {
+  accent-color: #00f5d4 !important;
+  width: 16px !important;
+  height: 16px !important;
+  cursor: pointer !important;
+}
+
+.cap-layout-opt-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  padding: 4px 0 !important;
+}
+
+.cap-layout-opt-row select {
+  background: #1e2026 !important;
+  border: 1px solid #3b3e4f !important;
+  color: #ffffff !important;
+  font-size: 11.5px !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+}
+
+.cap-layout-reset-btn {
+  width: 100% !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #f87171 !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+  margin-top: 4px !important;
+}
+
+.cap-layout-reset-btn:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: #ef4444 !important;
+}
+
+/* Transitions panel & Export panel tweaks */
+.panel.export, .panel.transitions {
+  min-width: 0 !important;
+}
