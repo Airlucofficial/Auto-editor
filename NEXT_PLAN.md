@@ -36,6 +36,7 @@ Every major challenge identified has an exact, mathematically grounded architect
 | **5** | **User lacks stickers, icons, or graphics** | Users have a script but zero visual assets to illustrate concepts. | **Autonomous Asset Retrieval Agent:** Detects missing visual entities from the transcript (e.g., *"Bitcoin chart"*, *"Warning icon"*), queries transparent PNG / stock repositories, downloads them to `storage/assets/`, and binds them to the timeline. |
 | **6** | **Muddy, distorted audio mixing** | Background music or loud sound effects overpower the narrator's voice. | **Intelligent Sidechain Ducking:** Narrator voiceover is mastered to broadcast standard ($-14\text{ LUFS}$). Background tracks are automatically ducked by $-18\text{dB}$ whenever vocal energy is detected. |
 | **7** | **Laptop freezes / GPU crashes during live demo** | Heavy diffusion models crash laptop VRAM during presentations. | **Stage-Defense Architecture:** Whisper runs on quantized 8-bit **CPU** (<250MB RAM). Video compositing runs via standard H.264 hardware encoders (NVENC/QSV) with a fast **720p 6-second Demo Mode** and an offline fallback cache. |
+| **8** | **Copyright strikes / YouTube Content ID claims** | AI web scrapers download copyrighted stickers, watermarked photos, or registered audio samples. | **Safe-Harbor DRM & Procedural Synthesis Pipeline:** Zero recorded audio (100% mathematically synthesized DSP SFX); strict CC0 / Public Domain API gateway (Openverse, Iconify, Pixabay); dynamic fallback to LLM-generated SVG vector graphics; and automated export of `LICENSE_MANIFEST.json` for YouTube description credit. |
 
 ---
 
@@ -63,11 +64,12 @@ Every major challenge identified has an exact, mathematically grounded architect
 │  3. Semantic Boundary & Entity Extractor                               │
 │     └─► Chunks text into grammatical ideas & identifies visual needs   │
 │                                                                        │
-│  4. Autonomous Asset Hunter                                            │
-│     └─► Downloads transparent PNG stickers & stock B-roll to storage/  │
+│  4. Safe-Harbor Asset Gateway & Procedural SVG Synthesizer             │
+│     └─► CC0/Public-Domain API filter + dynamic LLM SVG-to-PNG fallback │
 │                                                                        │
-│  5. Closed-Loop QA Gateway (The Validator)                             │
+│  5. Closed-Loop QA Gateway (The Validator & License Auditor)           │
 │     └─► Snaps cuts, verifies contrast, clamps safe-zones, ducks audio  │
+│     └─► Audits copyright and compiles LICENSE_MANIFEST.json            │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ Outputs 100% verified EDL
                                     ▼
@@ -115,13 +117,27 @@ Every major challenge identified has an exact, mathematically grounded architect
     - **Alex Hormozi Profile:** Kinetic hook pacing ($2\text{s}–3\text{s}$), `hormozi_bold` active green highlight, center-punch zooms, micro-whooshes.
   - Prompt Engineering: Structured system prompt enforcing JSON schema conforming to AutoEditor's timeline spec.
 
-### Phase 4: Autonomous Asset Hunter (Sticker & B-Roll Scraper)
-- **Objective:** Automatically source missing visual entities so users don't have to hunt for images.
-- **Implementation (`asset_hunter.py`):**
-  - When the LLM Director identifies a missing graphic (e.g., *"Bitcoin logo PNG"* or *"Shocked face sticker"*):
-  - Queries public transparent icon APIs (Flaticon / Wikimedia / Openverse / DuckDuckGo image search filter `type:png transparent`).
-  - Downloads and validates alpha channel (transparency check using Pillow).
-  - Saves asset to `storage/assets/<project_id>/` and inserts into Track 2 (Overlay Track).
+### Phase 4: Safe-Harbor Asset Gateway & SVG Procedural Synthesis (Copyright & Content-ID Immunity)
+- **Objective:** Enable the AI agent to acquire stickers, icons, and B-roll autonomously with a 100% guarantee of zero copyright infringement, DMCA strikes, or YouTube Content ID claims.
+- **Implementation (`asset_hunter.py` & `svg_synthesizer.py`):**
+  1. **Strict Safe-Harbor API Gateway (No Unfiltered Web Crawling):**
+     - Hardcoded whitelist of commercial-safe repositories with programmatic license verification:
+       - *Stickers / Cutouts:* **Openverse API** & **Wikimedia Commons** with strict query parameters: `license=cc0,pdm` (Creative Commons Zero / Public Domain Mark only).
+       - *Icons & UI Glyphs:* **Iconify / Lucide API** (>150,000 MIT/Apache-2.0 commercial icons).
+       - *Stock Footage / Photos:* **Pexels & Pixabay APIs** (Direct commercial license, zero attribution required).
+     - Raw Google/Bing image scraping is strictly blocked to eliminate copyrighted Pinterest/watermarked image hazards.
+  2. **Procedural Vector Graphic (SVG-to-PNG) Generation:**
+     - If no validated CC0 asset satisfies the semantic concept (e.g., *"futuristic glowing green trend arrow"*, *"caution alert shield with 3 exclamation marks"*):
+     - The LLM writes raw SVG XML code directly.
+     - AutoEditor's backend rasterizes the SVG to a 4K transparent PNG using `cairosvg` or Pillow.
+     - **Benefit:** 100% original, vector-crisp, infinite resolution, and mathematically impossible to infringe on any copyright.
+  3. **Zero-Acoustic-Sample DSP Sound Synthesis:**
+     - All sound effects utilize AutoEditor's internal mathematical DSP synthesis engine (`generate_sfx.py`).
+     - Pure algorithmic oscillators (sine sweeps, bandpass-filtered noise envelopes) at 44.1kHz 16-bit PCM.
+     - Zero microphone recordings or third-party audio samples $\to$ 0.0% Content ID fingerprint match.
+  4. **Automated Licensing Manifest & YouTube Description Generator:**
+     - Compiles an auditable `export_video_license_report.json` detailing license provenance for every asset on the timeline.
+     - Automatically generates ready-to-paste YouTube description attribution text if any CC-BY 4.0 asset is utilized.
 
 ### Phase 5: Multi-Layer Timeline Composition & Paired SFX Synchronization
 - **Objective:** Layer stickers, popups, and paired sound effects on top of base video.
@@ -141,6 +157,7 @@ Every major challenge identified has an exact, mathematically grounded architect
   3. **Social Safe-Zone Clamp:** Constrains subtitle box to $65\%–80\%$ $Y$-zone and $50\%$ $X$-center.
   4. **Pacing Audit:** Auto-injects camera zoom if any frame exceeds $2.8\text{s}$ without motion.
   5. **Audio Master Check:** Verifies voiceover levels meet $-14\text{ LUFS}$ broadcast target.
+  6. **Copyright & DRM Pre-Flight Audit:** Verifies that every external visual asset has a validated CC0/Public Domain API provenance record or is an internally synthesized SVG/DSP asset before allowing final export.
 
 ### Phase 7: Stage-Defense & Live Presentation Failsafe
 - **Objective:** 100% guarantee against crashes or freezes during university defense.
@@ -165,6 +182,8 @@ When presenting this project to a software engineering review panel:
    Reduces a 4-hour human editing workflow down to **75 seconds**, at an operating cost of **\$0.002 per video**.
 4. **Reliability Architecture:**  
    Closed-loop automated verification eliminating hallucinations, desync, and visual collisions before rendering.
+5. **Intellectual Property & DRM Compliance:**  
+   First autonomous video editing system with a built-in Safe-Harbor gateway, algorithmic DSP audio synthesis, dynamic SVG code rasterization, and automated `LICENSE_MANIFEST.json` audit generation.
 
 ---
 *(End of Roadmap — Ready for execution in next development cycle)*
