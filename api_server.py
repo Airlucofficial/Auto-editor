@@ -36,6 +36,11 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 # Import transcription engine
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import transcribe_engine
+import openrouter_client
+import style_distiller
+import asset_hunter
+import svg_synthesizer
+import qa_gateway
 
 
 PORT = 4001
@@ -78,7 +83,8 @@ class AutoEditorHandler(BaseHTTPRequestHandler):
                 "ok": True,
                 "service": "AutoEditor AI Engine",
                 "model_cached": transcribe_engine.is_model_cached(),
-                "version": "2.0",
+                "version": "3.0",
+                "ai_director_ready": True,
                 "pid": os.getpid()
             })
             return
@@ -217,6 +223,59 @@ class AutoEditorHandler(BaseHTTPRequestHandler):
             self.end_headers()
             with open(video_path, "rb") as f:
                 shutil.copyfileobj(f, self.wfile)
+            return
+
+        if path == "/api/openrouter/models":
+            try:
+                client = openrouter_client.OpenRouterClient()
+                models = client.fetch_models() if hasattr(client, 'fetch_models') else []
+                is_conf = client.is_configured() if hasattr(client, 'is_configured') else False
+                self.send_json_response(200, {"models": models, "configured": is_conf})
+            except Exception as e:
+                self.send_json_response(200, {"models": [], "configured": False, "error": str(e)})
+            return
+
+        if path == "/api/openrouter/config":
+            try:
+                config = openrouter_client.OpenRouterClient().load_config()
+                if "api_key" in config and config["api_key"]:
+                    config["api_key"] = "***" + config["api_key"][-4:]
+                self.send_json_response(200, config)
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/profiles":
+            try:
+                profiles = style_distiller.list_profiles()
+                self.send_json_response(200, profiles)
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path.startswith("/api/profiles/"):
+            try:
+                profile_name = path.split("/")[-1]
+                profile = style_distiller.load_profile(profile_name)
+                if profile:
+                    self.send_json_response(200, profile)
+                else:
+                    self.send_json_response(404, {"error": "Profile not found"})
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/assets/manifest":
+            try:
+                manifest_path = os.path.join(STORAGE_DIR, "LICENSE_MANIFEST.json")
+                if os.path.exists(manifest_path):
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        manifest = json.load(f)
+                    self.send_json_response(200, manifest)
+                else:
+                    self.send_json_response(200, {})
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
             return
 
         self.send_json_response(404, {"error": "Not Found"})
@@ -580,6 +639,163 @@ class AutoEditorHandler(BaseHTTPRequestHandler):
                 self.send_json_response(200, resp)
             except Exception as e:
                 self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/openrouter/config":
+            try:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len)
+                data = json.loads(body.decode("utf-8"))
+                openrouter_client.OpenRouterClient().save_config(data)
+                self.send_json_response(200, {"ok": True})
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/assets/search":
+            try:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len)
+                data = json.loads(body.decode("utf-8"))
+                query_str = data.get("query")
+                hunter = asset_hunter.AssetHunter()
+                results = hunter.search_openverse(query_str, media_type=data.get("media_type"), license_filter=data.get("license_filter"))
+                self.send_json_response(200, results)
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/assets/generate-svg":
+            try:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len)
+                data = json.loads(body.decode("utf-8"))
+                svg_content = svg_synthesizer.generate_svg_from_concept(
+                    data.get("concept"),
+                    color=data.get("color"),
+                    style=data.get("style"),
+                    width=data.get("width"),
+                    height=data.get("height")
+                )
+                png_path = svg_synthesizer.rasterize_svg_to_png(svg_content)
+                self.send_json_response(200, {"png_path": png_path})
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/qa/validate":
+            try:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len)
+                data = json.loads(body.decode("utf-8"))
+                gateway = qa_gateway.QAGateway()
+                report = gateway.run_full_qa(
+                    data.get("timeline"),
+                    word_grid=data.get("word_grid"),
+                    audio_path=data.get("audio_path"),
+                    assets=data.get("assets"),
+                    subtitle_color=data.get("subtitle_color"),
+                    video_width=data.get("video_width"),
+                    video_height=data.get("video_height")
+                )
+                self.send_json_response(200, report.to_dict() if hasattr(report, 'to_dict') else report)
+            except Exception as e:
+                self.send_json_response(500, {"error": str(e)})
+            return
+
+        if path == "/api/ai-director":
+            try:
+                content_type = self.headers.get("Content-Type", "")
+                content_len = int(self.headers.get("Content-Length", 0))
+                
+                parsed_url = urlparse(self.path)
+                query_params = parse_qs(parsed_url.query)
+                mode_query = query_params.get("mode", [None])[0]
+                
+                if "multipart/form-data" in content_type:
+                    self.send_json_response(400, {"error": "Use JSON body with audio_path for ai-director"})
+                    return
+                else:
+                    body = self.rfile.read(content_len)
+                    data = json.loads(body.decode("utf-8"))
+                
+                audio_path = data.get("audio_path")
+                style_profile_name = data.get("style_profile")
+                user_prompt = data.get("user_prompt")
+                mode = data.get("mode", mode_query or "high")
+                api_key = data.get("api_key")
+                
+                if not audio_path or not os.path.exists(audio_path):
+                    self.send_json_response(400, {"error": "Valid audio_path required"})
+                    return
+                
+                model_size = "base.en" if mode == "presentation" else "small"
+                transcript = transcribe_engine.transcribe_audio(audio_path, model_size=model_size)
+                
+                chunks = transcribe_engine.semantic_chunk_text(transcript)
+                
+                if mode != "presentation":
+                    hunter = asset_hunter.AssetHunter()
+                    entities = hunter.extract_visual_entities(chunks)
+                else:
+                    entities = []
+                
+                profile = style_distiller.load_profile(style_profile_name) if hasattr(style_distiller, "load_profile") else None
+                if not profile and hasattr(style_distiller, "get_factory_profile"):
+                    profile = style_distiller.get_factory_profile(style_profile_name)
+                    
+                client = openrouter_client.OpenRouterClient()
+                if api_key:
+                    client.api_key = api_key
+                else:
+                    client.load_config()
+                
+                edit_plan = None
+                try:
+                    import time
+                    start_time = time.time()
+                    edit_plan = client.generate_edit_plan(chunks, profile, user_prompt)
+                    if mode == "presentation" and (time.time() - start_time) > 4:
+                        raise Exception("Timeout")
+                except Exception as e:
+                    if mode == "presentation":
+                        with open(os.path.join(STORAGE_DIR, "fallback_templates", "default_edit.json"), "r", encoding="utf-8") as f:
+                            edit_plan = json.load(f)
+                    else:
+                        raise e
+                        
+                if not edit_plan:
+                    with open(os.path.join(STORAGE_DIR, "fallback_templates", "default_edit.json"), "r", encoding="utf-8") as f:
+                        edit_plan = json.load(f)
+                
+                snapped_cuts = transcribe_engine.align_cuts_to_phonemes(edit_plan, transcript)
+                
+                sfx_events = transcribe_engine.apply_smart_sfx_pairing(snapped_cuts, profile)
+                
+                gateway = qa_gateway.QAGateway()
+                qa_report = gateway.run_full_qa(snapped_cuts, word_grid=transcript, subtitle_color='#FFFFFF')
+                
+                self.send_json_response(200, {
+                    "transcript": transcript,
+                    "edit_plan": snapped_cuts,
+                    "qa_report": qa_report.to_dict() if hasattr(qa_report, 'to_dict') else qa_report,
+                    "sfx_events": sfx_events,
+                    "assets": entities,
+                    "cost_estimate": 0.0
+                })
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                try:
+                    with open(os.path.join(STORAGE_DIR, "fallback_templates", "default_edit.json"), "r", encoding="utf-8") as f:
+                        fallback_plan = json.load(f)
+                    self.send_json_response(200, {
+                        "error_handled": str(e),
+                        "edit_plan": fallback_plan
+                    })
+                except Exception as ex:
+                    self.send_json_response(500, {"error": str(e), "fallback_error": str(ex)})
             return
 
         self.send_json_response(404, {"error": "Not Found"})

@@ -1,0 +1,74 @@
+{
+  "template_name": "default_safe_edit",
+  "version": "1.0",
+  "description": "Pre-compiled deterministic edit template for offline/presentation fallback. Applies safe, balanced editing rules without requiring AI.",
+  "created_at": "2026-09-10T00:00:00Z",
+  "rules": {
+    "cut_strategy": {
+      "method": "sentence_boundary",
+      "description": "Cut at sentence boundaries detected from transcript punctuation",
+      "min_segment_duration_s": 2.0,
+      "max_segment_duration_s": 6.0,
+      "prefer_silence_gaps": true,
+      "silence_gap_threshold_ms": 200
+    },
+    "pacing": {
+      "hook_phase_duration_s": 5.0,
+      "hook_asl_s": 1.5,
+      "body_asl_s": 3.5,
+      "climax_asl_s": 2.0,
+      "boredom_threshold_s": 2.8,
+      "boredom_fix": "ken_burns_zoom",
+      "ken_burns_scale": 1.06
+    },
+    "typography": {
+      "default_style": "classic_clean",
+      "position_y": 0.78,
+      "position_x": 0.50,
+      "font_scale": 1.0,
+      "shadow_px": 3.0,
+      "safe_zone_y": [0.65, 0.80],
+      "safe_zone_x": [0.10, 0.90]
+    },
+    "sfx_pairing": {
+      "enabled": true,
+      "volume_db": -8,
+      "mappings": {
+        "scene_cut": "camera_click",
+        "topic_change": "whoosh_fast",
+        "emphasis": "impact_punch",
+        "question": "gentle_chime",
+        "statistic": "snappy_switch",
+        "conclusion": "cinematic_boom",
+        "list_item": "bubble_pop",
+        "transition": "swoosh_smooth"
+      }
+    },
+    "audio_mastering": {
+      "voice_target_lufs": -14,
+      "ducking_db": -18,
+      "ducking_freq_range_hz": [1000, 4000],
+      "jcut_offset_ms": -60
+    },
+    "motion": {
+      "default_motion": "subtle_zoom_in",
+      "motion_amount": 0.06,
+      "alternate_every_n_scenes": 3
+    },
+    "asset_defaults": {
+      "prefer_icons": true,
+      "icon_set": "lucide",
+      "sticker_opacity": 0.85,
+      "sticker_scale": 0.25,
+      "sticker_position": "top_right"
+    }
+  },
+  "presentation_mode": {
+    "whisper_model": "base.en",
+    "render_resolution": "720p",
+    "render_fps": 24,
+    "max_duration_s": 120,
+    "skip_asset_download": true,
+    "use_cached_sfx_only": true
+  }
+}

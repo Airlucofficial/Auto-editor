@@ -3613,3 +3613,97 @@ body.is-playhead-dragging * {
 .panel.export, .panel.transitions {
   min-width: 0 !important;
 }
+
+/* ==========================================================================
+   AI DIRECTOR MODAL STYLES
+   ========================================================================== */
+.aid-magic-btn {
+  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%) !important;
+  margin-left: 8px !important;
+}
+
+.aid-modal-overlay {
+  z-index: 1000000 !important;
+}
+
+.aid-modal {
+  border-color: #1e293b;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(79, 70, 229, 0.2);
+}
+
+.aid-header {
+  background: linear-gradient(90deg, #11141c 0%, #1e1b4b 100%);
+  border-bottom: 1px solid #312e81;
+}
+
+.aid-tabs {
+  background: #11141c;
+}
+
+.aid-tab-btn.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.aid-config-section h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.aid-api-key-input {
+  flex: 1;
+  font-family: monospace;
+}
+
+.aid-model-select {
+  appearance: auto;
+  background-color: #151922;
+  cursor: pointer;
+}
+
+.aid-style-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.aid-generate-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+.aid-generate-btn:hover {
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4) !important;
+}
+
+.aid-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aid-progress-step {
+  font-size: 13px;
+  color: #64748b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.3s;
+}
+.aid-progress-step.active {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.3);
+  font-weight: 600;
+}
+.aid-progress-step.done {
+  color: #34d399;
+}
+
+.aid-qa-card.passed {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.05);
+}
+.aid-qa-card.failed {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}

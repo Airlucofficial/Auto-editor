@@ -1,0 +1,53 @@
+{
+  "profile_name": "mrbeast_viral",
+  "display_name": "MrBeast Viral Retention",
+  "description": "Extremely rapid hook, constant visual stimulation, punch-zooms, explosive SFX, high-energy typography.",
+  "version": "1.0",
+  "created_at": "2026-09-10T09:40:05Z",
+  "hook_phase": {
+    "duration_s": 5,
+    "asl_range": [0.6, 1.0],
+    "acceleration": "exponential",
+    "cadence_formula": "L_i = L_0 * exp(-k * t)",
+    "visual_density": "extreme",
+    "sfx_triggers": ["explosive_boom", "whip_whoosh"]
+  },
+  "buildup_phase": {
+    "asl_range": [1.5, 2.5],
+    "overlay_triggers": ["noun", "metric", "statistic", "proper_noun", "action"],
+    "pacing": "fast",
+    "sfx_triggers": ["pop", "cash_register", "whip"]
+  },
+  "climax_phase": {
+    "punch_zoom": 1.25,
+    "sfx": "explosive_boom",
+    "transition": "glitch",
+    "asl_range": [0.4, 0.8]
+  },
+  "typography": {
+    "font": "ObelixPro",
+    "position_y": 0.75,
+    "position_x": 0.50,
+    "style_key": "neon_bold",
+    "shadow_px": 5.0,
+    "min_contrast_ratio": 7.0
+  },
+  "pacing": {
+    "boredom_threshold_s": 2.0,
+    "jcut_offset_ms": -120,
+    "optical_flow_min_pct": 25,
+    "ken_burns_scale": 1.15
+  },
+  "sound_design": {
+    "ducking_db": -24,
+    "ducking_freq_range": [500, 5000],
+    "vocal_target_lufs": -12,
+    "sfx_volume_db": -3,
+    "jcut_audio_lead_ms": -120
+  },
+  "asset_preferences": {
+    "sticker_style": "3d_glossy",
+    "icon_set": "emoji",
+    "overlay_opacity": 1.0
+  }
+}

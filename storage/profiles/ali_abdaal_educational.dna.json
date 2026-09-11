@@ -1,0 +1,53 @@
+{
+  "profile_name": "ali_abdaal_educational",
+  "display_name": "Ali Abdaal Calm Educational",
+  "description": "Moderate hook, clean typography, stable pacing, gentle transitions, minimal SFX.",
+  "version": "1.0",
+  "created_at": "2026-09-10T09:40:05Z",
+  "hook_phase": {
+    "duration_s": 5,
+    "asl_range": [2.0, 3.0],
+    "acceleration": "linear",
+    "cadence_formula": "L_i = L_0",
+    "visual_density": "medium",
+    "sfx_triggers": ["gentle_whoosh"]
+  },
+  "buildup_phase": {
+    "asl_range": [3.0, 4.0],
+    "overlay_triggers": ["key_term", "quote", "book_title"],
+    "pacing": "stable",
+    "sfx_triggers": ["gentle_chime", "paper_rustle"]
+  },
+  "climax_phase": {
+    "punch_zoom": 1.05,
+    "sfx": "gentle_chime",
+    "transition": "smooth_fade",
+    "asl_range": [2.0, 3.0]
+  },
+  "typography": {
+    "font": "Inter",
+    "position_y": 0.80,
+    "position_x": 0.50,
+    "style_key": "clean_sans",
+    "shadow_px": 2.0,
+    "min_contrast_ratio": 4.5
+  },
+  "pacing": {
+    "boredom_threshold_s": 5.0,
+    "jcut_offset_ms": -50,
+    "optical_flow_min_pct": 5,
+    "ken_burns_scale": 1.03
+  },
+  "sound_design": {
+    "ducking_db": -12,
+    "ducking_freq_range": [1000, 3000],
+    "vocal_target_lufs": -16,
+    "sfx_volume_db": -12,
+    "jcut_audio_lead_ms": -50
+  },
+  "asset_preferences": {
+    "sticker_style": "minimalist",
+    "icon_set": "feather",
+    "overlay_opacity": 0.7
+  }
+}

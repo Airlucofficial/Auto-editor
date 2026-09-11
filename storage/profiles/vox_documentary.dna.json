@@ -1,0 +1,53 @@
+{
+  "profile_name": "vox_documentary",
+  "display_name": "Vox Documentary",
+  "description": "Investigative pacing, data overlays, clean sans-serif typography, methodical build-up.",
+  "version": "1.0",
+  "created_at": "2026-09-10T09:40:05Z",
+  "hook_phase": {
+    "duration_s": 10,
+    "asl_range": [1.5, 2.5],
+    "acceleration": "linear",
+    "cadence_formula": "L_i = L_0",
+    "visual_density": "high",
+    "sfx_triggers": ["analog_click", "tape_stop"]
+  },
+  "buildup_phase": {
+    "asl_range": [3.0, 5.0],
+    "overlay_triggers": ["data_point", "timeline", "map", "document"],
+    "pacing": "methodical",
+    "sfx_triggers": ["typewriter", "marker_squeak"]
+  },
+  "climax_phase": {
+    "punch_zoom": 1.10,
+    "sfx": "orchestral_hit",
+    "transition": "match_cut",
+    "asl_range": [1.0, 2.0]
+  },
+  "typography": {
+    "font": "Helvetica Neue",
+    "position_y": 0.85,
+    "position_x": 0.15,
+    "style_key": "highlight_box",
+    "shadow_px": 0.0,
+    "min_contrast_ratio": 5.0
+  },
+  "pacing": {
+    "boredom_threshold_s": 4.0,
+    "jcut_offset_ms": -100,
+    "optical_flow_min_pct": 8,
+    "ken_burns_scale": 1.05
+  },
+  "sound_design": {
+    "ducking_db": -16,
+    "ducking_freq_range": [800, 4000],
+    "vocal_target_lufs": -14,
+    "sfx_volume_db": -9,
+    "jcut_audio_lead_ms": -100
+  },
+  "asset_preferences": {
+    "sticker_style": "infographic",
+    "icon_set": "custom_vector",
+    "overlay_opacity": 0.95
+  }
+}

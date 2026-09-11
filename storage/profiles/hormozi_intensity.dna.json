@@ -1,0 +1,53 @@
+{
+  "profile_name": "hormozi_intensity",
+  "display_name": "Alex Hormozi Intensity",
+  "description": "Ultra-aggressive hook, bold all-caps typography, rapid-fire cuts, yellow/black color scheme.",
+  "version": "1.0",
+  "created_at": "2026-09-10T09:40:05Z",
+  "hook_phase": {
+    "duration_s": 3,
+    "asl_range": [0.5, 1.0],
+    "acceleration": "exponential",
+    "cadence_formula": "L_i = L_0 * exp(-k * t)",
+    "visual_density": "very_high",
+    "sfx_triggers": ["impact_punch", "heavy_whoosh"]
+  },
+  "buildup_phase": {
+    "asl_range": [1.5, 2.5],
+    "overlay_triggers": ["noun", "verb", "metric", "bold_statement"],
+    "pacing": "aggressive",
+    "sfx_triggers": ["pop_hard", "swish"]
+  },
+  "climax_phase": {
+    "punch_zoom": 1.20,
+    "sfx": "impact_punch",
+    "transition": "hard_cut",
+    "asl_range": [0.5, 1.0]
+  },
+  "typography": {
+    "font": "Montserrat Black",
+    "position_y": 0.70,
+    "position_x": 0.50,
+    "style_key": "hormozi_bold",
+    "shadow_px": 4.0,
+    "min_contrast_ratio": 6.0
+  },
+  "pacing": {
+    "boredom_threshold_s": 1.8,
+    "jcut_offset_ms": -100,
+    "optical_flow_min_pct": 20,
+    "ken_burns_scale": 1.10
+  },
+  "sound_design": {
+    "ducking_db": -20,
+    "ducking_freq_range": [1000, 4500],
+    "vocal_target_lufs": -12,
+    "sfx_volume_db": -4,
+    "jcut_audio_lead_ms": -100
+  },
+  "asset_preferences": {
+    "sticker_style": "bold_stroke",
+    "icon_set": "solid",
+    "overlay_opacity": 1.0
+  }
+}

@@ -9,7 +9,9 @@ venv/
 .venv/
 
 # AI Generated Storage & Temporary Renders
-storage/
+storage/*
+!storage/profiles/
+!storage/fallback_templates/
 *.mp4
 *.wav
 *.ass
